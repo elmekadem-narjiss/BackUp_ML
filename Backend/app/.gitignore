@@ -1,0 +1,6 @@
+# Ignorer les modèles volumineux
+app/mlflow/mlruns/*/artifacts/sarimax_model/model.statsmodels
+mlartifacts/*/artifacts/sarimax_model/model.statsmodels
+
+# Ignorer les fichiers de visualisation
+app/mlflow/forecast_plot.png
