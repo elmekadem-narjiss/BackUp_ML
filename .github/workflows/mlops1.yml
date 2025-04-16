@@ -3,10 +3,10 @@ name: MLFlow and Snakemake Workflow
 on:
   push:
     branches:
-      - main  # Assure-toi que c'est bien 'prod' et pas un autre nom
+      - prod  # Assure-toi que c'est bien 'prod' et pas un autre nom
   pull_request:
     branches:
-      - main  # Vérifie également cela
+      - prod  # Vérifie également cela
 
 jobs:
   build:
@@ -20,6 +20,12 @@ jobs:
       uses: actions/setup-python@v2
       with:
         python-version: '3.8'
+
+    - name: Generate requirements.txt
+      run: |
+        # Créer un fichier requirements.txt basé sur les packages installés
+        python -m pip freeze > requirements.txt
+        cat requirements.txt  # Afficher le contenu du fichier pour vérifier
 
     - name: Install dependencies
       run: |
