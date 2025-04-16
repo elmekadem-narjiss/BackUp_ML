@@ -21,16 +21,23 @@ jobs:
       with:
         python-version: '3.8'
 
-    - name: Create and activate virtual environment + install dependencies
+    - name: Set up virtual environment and install dependencies
       run: |
         python -m venv venv
         source venv/bin/activate
-        pip install --upgrade pip
+        python -m pip install --upgrade pip
+
+        # Crée requirements.txt s’il n’existe pas
         echo "mlflow" >> requirements.txt
         echo "prometheus_client" >> requirements.txt
         echo "snakemake" >> requirements.txt
-        echo "pulp" >> requirements.txt
+
         pip install -r requirements.txt
+        pip install pulp==2.7.0
+        echo "✅ Environnement prêt"
+
+        # Vérifie que snakemake est bien installé
+        which snakemake || echo "⚠️ Snakemake non trouvé"
       shell: bash
 
     - name: Start MLFlow server
@@ -58,4 +65,4 @@ jobs:
 
     - name: Complete Monitoring
       run: |
-        echo "Fin de l'exécution, vérification via Grafana et Prometheus"
+        echo "✅ Fin de l'exécution, vérification via Grafana et Prometheus"
