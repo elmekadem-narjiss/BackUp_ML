@@ -77,6 +77,12 @@ jobs:
         fi
       shell: bash
 
+    - name: Start Prometheus PushGateway
+      run: |
+        docker run -d -p 9091:9091 prom/pushgateway
+        sleep 5
+      shell: bash
+
     - name: Start MLFlow server
       run: |
         source venv/bin/activate
@@ -84,29 +90,39 @@ jobs:
         sleep 10
       shell: bash
 
-    - name: Run Snakemake pipeline
+    - name: Start execution timer
+      id: start-timer
+      run: echo "start_time=$(date +%s)" >> $GITHUB_ENV
+      shell: bash
+
+    - name: Run Snakemake pipeline and push status metric
       run: |
         source venv/bin/activate
-        snakemake --cores 4
+        if snakemake --cores 4; then
+          echo "step_status{step=\"snakemake_pipeline\"} 1" | curl --data-binary @- http://127.0.0.1:9091/metrics/job/mlflow_metrics
+        else
+          echo "step_status{step=\"snakemake_pipeline\"} 0" | curl --data-binary @- http://127.0.0.1:9091/metrics/job/mlflow_metrics
+          exit 1
+        fi
       shell: bash
 
-    - name: Start Prometheus PushGateway
-      run: |
-        docker run -d -p 9091:9091 prom/pushgateway
-        sleep 5
-      shell: bash
-
-    - name: Push success metric to Prometheus
+    - name: Push global success metric to Prometheus
       run: |
         echo "success 1" | curl --data-binary @- http://127.0.0.1:9091/metrics/job/mlflow_metrics
       shell: bash
 
+    - name: Push execution duration metric
+      run: |
+        end_time=$(date +%s)
+        duration=$((end_time - $start_time))
+        echo "execution_duration_seconds ${duration}" | curl --data-binary @- http://127.0.0.1:9091/metrics/job/mlflow_metrics
+      shell: bash
+
     - name: Check metrics in PushGateway
       run: |
-        curl http://127.0.0.1:9091/metrics | grep success || echo "⚠️ Métrique 'success' non trouvée"
+        curl http://127.0.0.1:9091/metrics | grep -E 'success|execution_duration_seconds|step_status' || echo "⚠️ Certaines métriques manquent"
       shell: bash
 
     - name: Complete Monitoring
-      run: |
-        echo "✅ Fin de l'exécution, vérification via Grafana et Prometheus"
+      run: echo "✅ Fin de l'exécution, vérification via Grafana et Prometheus"
       shell: bash
