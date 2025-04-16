@@ -16,6 +16,11 @@ jobs:
     - name: Checkout code
       uses: actions/checkout@v2
 
+    - name: Patch keras import in lstm_model.py
+      run: |
+        sed -i 's/from keras\.api\.models/from tensorflow.keras.models/' Backend/app/services/lstm_model.py
+      shell: bash
+
     - name: Set up Python
       uses: actions/setup-python@v2
       with:
