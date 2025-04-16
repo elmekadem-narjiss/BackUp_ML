@@ -31,6 +31,7 @@ jobs:
         echo "mlflow" >> requirements.txt
         echo "prometheus_client" >> requirements.txt
         echo "snakemake" >> requirements.txt
+        echo "pytest" >> requirements.txt
 
         # Installation des dépendances
         pip install -r requirements.txt
@@ -68,10 +69,10 @@ jobs:
         snakemake --cores 4
       shell: bash
 
-    - name: Run your ML training or tests
+    - name: Run tests with pytest
       run: |
         source venv/bin/activate
-        python train.py
+        pytest tests/
       shell: bash
 
     - name: Push metrics to Prometheus
