@@ -1,0 +1,55 @@
+name: MLFlow and Snakemake Workflow
+
+on:
+  push:
+    branches:
+      - prod  # Assure-toi que c'est bien 'prod' et pas un autre nom
+  pull_request:
+    branches:
+      - prod  # Vérifie également cela
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v2
+
+    - name: Set up Python
+      uses: actions/setup-python@v2
+      with:
+        python-version: '3.8'
+
+    - name: Generate requirements.txt
+      run: |
+        # Créer un fichier requirements.txt basé sur les packages installés
+        python -m pip freeze > requirements.txt
+        cat requirements.txt  # Afficher le contenu du fichier pour vérifier
+
+    - name: Install dependencies
+      run: |
+        python -m pip install --upgrade pip
+        pip install -r requirements.txt
+        pip install mlflow prometheus_client snakemake
+
+    - name: Start MLFlow server
+      run: |
+        nohup mlflow ui --host 0.0.0.0 --port 5000 &
+        sleep 10
+
+    - name: Run Snakemake pipeline
+      run: |
+        snakemake --cores 4
+
+    - name: Run your ML training or tests
+      run: |
+        python train.py
+
+    - name: Push metrics to Prometheus
+      run: |
+        curl -X POST -d 'metric=success&value=1' http://localhost:9091/metrics/job/mlflow_metrics
+
+    - name: Complete Monitoring
+      run: |
+        echo "Fin de l'exécution, vérification via Grafana et Prometheus"
