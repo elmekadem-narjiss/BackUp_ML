@@ -92,7 +92,7 @@ jobs:
 
     - name: Push metrics to Prometheus
       run: |
-        curl -X POST -d 'metric=success&value=1' http://localhost:9091/metrics/job/mlflow_metrics
+        curl -X POST -d 'metric=success&value=1' http://localhost:9090/metrics/job/mlflow_metrics
       shell: bash
 
     - name: Complete Monitoring
