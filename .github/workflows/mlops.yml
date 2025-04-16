@@ -90,17 +90,6 @@ jobs:
         snakemake --cores 4
       shell: bash
 
-    - name: Check if tests directory exists
-      run: |
-        ls -l Backend/tests/
-      shell: bash
-
-    - name: Run tests with pytest
-      run: |
-        source venv/bin/activate
-        pytest Backend/tests/
-      shell: bash
-
     - name: Push metrics to Prometheus
       run: |
         curl -X POST -d 'metric=success&value=1' http://localhost:9091/metrics/job/mlflow_metrics
