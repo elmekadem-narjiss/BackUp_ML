@@ -26,8 +26,19 @@ jobs:
         python -m venv venv
         source venv/bin/activate
         pip install --upgrade pip
+
+    - name: Create requirements.txt
+      run: |
+        echo "mlflow" >> requirements.txt
+        echo "prometheus_client" >> requirements.txt
+        echo "snakemake" >> requirements.txt
+        echo "pulp" >> requirements.txt
+        cat requirements.txt  # Optionnel, pour vérifier le contenu du fichier
+
+    - name: Install dependencies
+      run: |
+        source venv/bin/activate
         pip install -r requirements.txt
-        pip install snakemake pulp
 
     - name: Start MLFlow server
       run: |
