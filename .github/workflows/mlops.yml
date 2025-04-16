@@ -27,23 +27,31 @@ jobs:
         source venv/bin/activate
         python -m pip install --upgrade pip
 
-        # Crée requirements.txt s’il n’existe pas
+        # Crée un requirements.txt minimal
         echo "mlflow" >> requirements.txt
         echo "prometheus_client" >> requirements.txt
         echo "snakemake" >> requirements.txt
-        pip install -r requirements.txt
 
-        # Installer Pulp avec version spécifique
+        # Installation des dépendances
+        pip install -r requirements.txt
         pip install pulp==2.7.0
 
-        # Vérifie Snakemake
+        # Vérifie que snakemake est bien installé
         which snakemake || echo "⚠️ Snakemake non trouvé"
       shell: bash
 
     - name: Create basic Snakefile if missing
       run: |
         if [ ! -f Snakefile ]; then
-          echo "rule all:\n  input:\n    'results/output.txt'\n\nrule example:\n  output:\n    'results/output.txt'\n  shell:\n    'mkdir -p results && echo Hello > results/output.txt'" > Snakefile
+          echo "rule all:" > Snakefile
+          echo "  input:" >> Snakefile
+          echo "    'results/output.txt'" >> Snakefile
+          echo "" >> Snakefile
+          echo "rule example:" >> Snakefile
+          echo "  output:" >> Snakefile
+          echo "    'results/output.txt'" >> Snakefile
+          echo "  shell:" >> Snakefile
+          echo "    'mkdir -p results && echo Hello > results/output.txt'" >> Snakefile
         fi
       shell: bash
 
@@ -69,7 +77,9 @@ jobs:
     - name: Push metrics to Prometheus
       run: |
         curl -X POST -d 'metric=success&value=1' http://localhost:9091/metrics/job/mlflow_metrics
+      shell: bash
 
     - name: Complete Monitoring
       run: |
         echo "✅ Fin de l'exécution, vérification via Grafana et Prometheus"
+      shell: bash
