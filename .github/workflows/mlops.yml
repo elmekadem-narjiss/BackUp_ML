@@ -34,7 +34,9 @@ jobs:
         echo "tensorflow" >> requirements.txt
         echo "httpx" >> requirements.txt
         echo "pytest" >> requirements.txt
-        echo "psycopg2-binary" >> requirements.txt  # Ajout de psycopg2-binary
+        echo "psycopg2-binary" >> requirements.txt
+        echo "redis" >> requirements.txt
+        echo "influxdb-client" >> requirements.txt
         # Installation des dépendances
         pip install -r requirements.txt
         pip install pulp==2.7.0
