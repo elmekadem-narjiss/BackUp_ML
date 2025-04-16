@@ -62,6 +62,25 @@ jobs:
         sed -i '/plt\.show()/d' Backend/app/services/lstm_model.py
       shell: bash
 
+    - name: Patch execution in lstm_model.py to fix NoneType error
+      run: |
+        sed -i '/train_and_save()/,$d' Backend/app/services/lstm_model.py
+        cat <<EOF >> Backend/app/services/lstm_model.py
+
+def run_pipeline():
+    model, scaler = train_and_save()
+    if model is not None:
+        X = load_data_from_influx(scaler, SEQ_LENGTH, PREDICTION_DAYS)
+        y_pred = model.predict(X)
+        save_predictions_to_db(y_pred)
+    else:
+        print("⚠️ Le modèle n'a pas été chargé correctement.")
+
+if __name__ == "__main__":
+    run_pipeline()
+EOF
+      shell: bash
+
     - name: Create basic Snakefile if missing
       run: |
         if [ ! -f Snakefile ]; then
