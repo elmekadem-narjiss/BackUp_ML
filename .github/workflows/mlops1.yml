@@ -3,10 +3,10 @@ name: MLFlow and Snakemake Workflow
 on:
   push:
     branches:
-      - prod  # Assure-toi que c'est bien 'prod' et pas un autre nom
+      - main  # Assure-toi que c'est bien 'prod' et pas un autre nom
   pull_request:
     branches:
-      - prod  # Vérifie également cela
+      - main  # Vérifie également cela
 
 jobs:
   build:
