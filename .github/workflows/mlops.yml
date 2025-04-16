@@ -3,15 +3,15 @@ name: MLFlow and Snakemake Workflow
 on:
   push:
     branches:
-      - prod
+      - prod  # Assure-toi que c'est bien 'prod' et pas un autre nom
   pull_request:
     branches:
-      - prod
+      - prod  # Vérifie également cela
 
 jobs:
   build:
     runs-on: ubuntu-latest
-    
+
     steps:
     - name: Checkout code
       uses: actions/checkout@v2
