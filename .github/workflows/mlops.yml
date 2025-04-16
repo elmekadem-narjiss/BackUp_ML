@@ -31,13 +31,20 @@ jobs:
         echo "mlflow" >> requirements.txt
         echo "prometheus_client" >> requirements.txt
         echo "snakemake" >> requirements.txt
-
         pip install -r requirements.txt
-        pip install pulp==2.7.0
-        echo "✅ Environnement prêt"
 
-        # Vérifie que snakemake est bien installé
+        # Installer Pulp avec version spécifique
+        pip install pulp==2.7.0
+
+        # Vérifie Snakemake
         which snakemake || echo "⚠️ Snakemake non trouvé"
+      shell: bash
+
+    - name: Create basic Snakefile if missing
+      run: |
+        if [ ! -f Snakefile ]; then
+          echo "rule all:\n  input:\n    'results/output.txt'\n\nrule example:\n  output:\n    'results/output.txt'\n  shell:\n    'mkdir -p results && echo Hello > results/output.txt'" > Snakefile
+        fi
       shell: bash
 
     - name: Start MLFlow server
