@@ -26,21 +26,19 @@ jobs:
         python -m venv venv
         source venv/bin/activate
         python -m pip install --upgrade pip
-
-        # Crée un requirements.txt minimal
-        echo "mlflow" >> requirements.txt
+        # Crée un requirements.txt avec toutes les dépendances nécessaires
+        echo "mlflow" > requirements.txt
         echo "prometheus_client" >> requirements.txt
         echo "snakemake" >> requirements.txt
         echo "fastapi" >> requirements.txt
         echo "tensorflow" >> requirements.txt
+        echo "httpx" >> requirements.txt
         echo "pytest" >> requirements.txt
-
         # Installation des dépendances
         pip install -r requirements.txt
         pip install pulp==2.7.0
-
         # Vérifie que snakemake est bien installé
-        which snakemake || echo "⚠️ Snakemake non trouvé"
+        command -v snakemake || echo "⚠️ Snakemake non trouvé"
       shell: bash
 
     - name: Create basic Snakefile if missing
