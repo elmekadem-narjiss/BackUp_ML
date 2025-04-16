@@ -26,7 +26,6 @@ jobs:
         python -m venv venv
         source venv/bin/activate
         python -m pip install --upgrade pip
-        # Crée un requirements.txt avec toutes les dépendances nécessaires
         echo "mlflow" > requirements.txt
         echo "prometheus_client" >> requirements.txt
         echo "snakemake" >> requirements.txt
@@ -38,7 +37,7 @@ jobs:
         echo "redis" >> requirements.txt
         echo "influxdb-client" >> requirements.txt
         echo "statsmodels" >> requirements.txt  
-        echo "paho-mqtt" >> requirements.txt  # ✅ Ajout manquant
+        echo "paho-mqtt" >> requirements.txt
         pip install -r requirements.txt
         pip install pulp==2.7.0
         command -v snakemake || echo "⚠️ Snakemake non trouvé"
@@ -54,6 +53,13 @@ jobs:
     - name: Patch unpacking error in lstm_model.py
       run: |
         sed -i 's/model, scaler, history, X, y = train_and_save()/model, scaler = train_and_save()/' Backend/app/services/lstm_model.py
+      shell: bash
+
+    - name: Patch to comment out history usage in lstm_model.py
+      run: |
+        sed -i '/plt\.plot(history\.history/d' Backend/app/services/lstm_model.py
+        sed -i '/plt\.legend()/d' Backend/app/services/lstm_model.py
+        sed -i '/plt\.show()/d' Backend/app/services/lstm_model.py
       shell: bash
 
     - name: Create basic Snakefile if missing
