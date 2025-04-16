@@ -37,10 +37,9 @@ jobs:
         echo "psycopg2-binary" >> requirements.txt
         echo "redis" >> requirements.txt
         echo "influxdb-client" >> requirements.txt
-        # Installation des dépendances
+        echo "paho-mqtt" >> requirements.txt  # ✅ Ajout manquant
         pip install -r requirements.txt
         pip install pulp==2.7.0
-        # Vérifie que snakemake est bien installé
         command -v snakemake || echo "⚠️ Snakemake non trouvé"
       shell: bash
 
@@ -49,6 +48,11 @@ jobs:
         sed -i 's/from keras\.api\.models/from tensorflow.keras.models/' Backend/app/services/lstm_model.py
         sed -i 's/from keras\.api\.layers/from tensorflow.keras.layers/' Backend/app/services/lstm_model.py
         sed -i 's/from keras\.api\.losses/from tensorflow.keras.losses/' Backend/app/services/lstm_model.py
+      shell: bash
+
+    - name: Patch unpacking error in lstm_model.py
+      run: |
+        sed -i 's/model, scaler, history, X, y = train_and_save()/model, scaler = train_and_save()/' Backend/app/services/lstm_model.py
       shell: bash
 
     - name: Create basic Snakefile if missing
