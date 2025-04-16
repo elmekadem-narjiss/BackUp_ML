@@ -96,10 +96,14 @@ jobs:
         sleep 5
       shell: bash
 
-    - name: Push metrics to Prometheus
+    - name: Push success metric to Prometheus
       run: |
-        curl -X GET http://127.0.0.1:9091/metrics/job/mlflow_metrics || echo "Pas de métriques existantes"
-        curl -X POST -d 'mlflow_metrics{metric="success"} 1.0' http://127.0.0.1:9091/metrics/job/mlflow_metrics
+        echo "success 1" | curl --data-binary @- http://127.0.0.1:9091/metrics/job/mlflow_metrics
+      shell: bash
+
+    - name: Check metrics in PushGateway
+      run: |
+        curl http://127.0.0.1:9091/metrics | grep success || echo "⚠️ Métrique 'success' non trouvée"
       shell: bash
 
     - name: Complete Monitoring
