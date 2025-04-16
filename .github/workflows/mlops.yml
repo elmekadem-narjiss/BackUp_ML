@@ -90,12 +90,15 @@ jobs:
         snakemake --cores 4
       shell: bash
 
+    - name: Start Prometheus PushGateway
+      run: |
+        docker run -d -p 9091:9091 prom/pushgateway
+        sleep 5
+      shell: bash
+
     - name: Push metrics to Prometheus
       run: |
-        # Vérification de l'état des métriques dans PushGateway avant d'envoyer
         curl -X GET http://127.0.0.1:9091/metrics/job/mlflow_metrics || echo "Pas de métriques existantes"
-
-        # Envoi de la métrique
         curl -X POST -d 'mlflow_metrics{metric="success"} 1.0' http://127.0.0.1:9091/metrics/job/mlflow_metrics
       shell: bash
 
