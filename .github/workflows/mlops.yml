@@ -34,7 +34,7 @@ jobs:
         echo "tensorflow" >> requirements.txt
         echo "httpx" >> requirements.txt
         echo "pytest" >> requirements.txt
-        echo "redis" >> requirements.txt
+        echo "psycopg2-binary" >> requirements.txt  # Ajout de psycopg2-binary
         # Installation des dépendances
         pip install -r requirements.txt
         pip install pulp==2.7.0
@@ -46,6 +46,7 @@ jobs:
       run: |
         sed -i 's/from keras\.api\.models/from tensorflow.keras.models/' Backend/app/services/lstm_model.py
         sed -i 's/from keras\.api\.layers/from tensorflow.keras.layers/' Backend/app/services/lstm_model.py
+        sed -i 's/from keras\.api\.losses/from tensorflow.keras.losses/' Backend/app/services/lstm_model.py
       shell: bash
 
     - name: Create basic Snakefile if missing
