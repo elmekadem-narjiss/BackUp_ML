@@ -37,6 +37,7 @@ jobs:
         echo "psycopg2-binary" >> requirements.txt
         echo "redis" >> requirements.txt
         echo "influxdb-client" >> requirements.txt
+        echo "statsmodels" >> requirements.txt  
         echo "paho-mqtt" >> requirements.txt  # ✅ Ajout manquant
         pip install -r requirements.txt
         pip install pulp==2.7.0
