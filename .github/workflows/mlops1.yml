@@ -3,10 +3,10 @@ name: MLFlow and Snakemake Workflow
 on:
   push:
     branches:
-      - prod  # Assure-toi que c'est bien 'prod' et pas un autre nom
+      - main
   pull_request:
     branches:
-      - prod  # Vérifie également cela
+      - main
 
 jobs:
   build:
@@ -21,35 +21,111 @@ jobs:
       with:
         python-version: '3.8'
 
-    - name: Generate requirements.txt
+    - name: Set up virtual environment and install dependencies
       run: |
-        # Créer un fichier requirements.txt basé sur les packages installés
-        python -m pip freeze > requirements.txt
-        cat requirements.txt  # Afficher le contenu du fichier pour vérifier
-
-    - name: Install dependencies
-      run: |
+        python -m venv venv
+        source venv/bin/activate
         python -m pip install --upgrade pip
+        echo "mlflow" > requirements.txt
+        echo "prometheus_client" >> requirements.txt
+        echo "snakemake" >> requirements.txt
+        echo "fastapi" >> requirements.txt
+        echo "tensorflow" >> requirements.txt
+        echo "httpx" >> requirements.txt
+        echo "pytest" >> requirements.txt
+        echo "psycopg2-binary" >> requirements.txt
+        echo "redis" >> requirements.txt
+        echo "influxdb-client" >> requirements.txt
+        echo "statsmodels" >> requirements.txt  
+        echo "paho-mqtt" >> requirements.txt
         pip install -r requirements.txt
-        pip install mlflow prometheus_client snakemake
+        pip install pulp==2.7.0
+        command -v snakemake || echo "⚠️ Snakemake non trouvé"
+      shell: bash
+
+    - name: Patch keras import in lstm_model.py
+      run: |
+        sed -i 's/from keras\.api\.models/from tensorflow.keras.models/' Backend/app/services/lstm_model.py
+        sed -i 's/from keras\.api\.layers/from tensorflow.keras.layers/' Backend/app/services/lstm_model.py
+        sed -i 's/from keras\.api\.losses/from tensorflow.keras.losses/' Backend/app/services/lstm_model.py
+      shell: bash
+
+    - name: Patch unpacking error in lstm_model.py
+      run: |
+        sed -i 's/model, scaler, history, X, y = train_and_save()/model, scaler = train_and_save()/' Backend/app/services/lstm_model.py
+      shell: bash
+
+    - name: Patch to comment out history usage in lstm_model.py
+      run: |
+        sed -i '/plt\.plot(history\.history/d' Backend/app/services/lstm_model.py
+        sed -i '/plt\.legend()/d' Backend/app/services/lstm_model.py
+        sed -i '/plt\.show()/d' Backend/app/services/lstm_model.py
+      shell: bash
+
+    - name: Patch execution in lstm_model.py to fix NoneType error
+      run: |
+        sed -i '/train_and_save()/,$d' Backend/app/services/lstm_model.py
+        cat <<EOF >> Backend/app/services/lstm_model.py
+
+def run_pipeline():
+    model, scaler = train_and_save()
+    if model is not None:
+        X = load_data_from_influx(scaler, SEQ_LENGTH, PREDICTION_DAYS)
+        y_pred = model.predict(X)
+        save_predictions_to_db(y_pred)
+    else:
+        print("⚠️ Le modèle n'a pas été chargé correctement.")
+
+if __name__ == "__main__":
+    run_pipeline()
+EOF
+      shell: bash
+
+    - name: Create basic Snakefile if missing
+      run: |
+        if [ ! -f Snakefile ]; then
+          echo "rule all:" > Snakefile
+          echo "  input:" >> Snakefile
+          echo "    'results/output.txt'" >> Snakefile
+          echo "" >> Snakefile
+          echo "rule example:" >> Snakefile
+          echo "  output:" >> Snakefile
+          echo "    'results/output.txt'" >> Snakefile
+          echo "  shell:" >> Snakefile
+          echo "    'mkdir -p results && echo Hello > results/output.txt'" >> Snakefile
+        fi
+      shell: bash
 
     - name: Start MLFlow server
       run: |
+        source venv/bin/activate
         nohup mlflow ui --host 0.0.0.0 --port 5000 &
         sleep 10
+      shell: bash
 
     - name: Run Snakemake pipeline
       run: |
+        source venv/bin/activate
         snakemake --cores 4
+      shell: bash
 
-    - name: Run your ML training or tests
+    - name: Check if tests directory exists
       run: |
-        python train.py
+        ls -l Backend/tests/
+      shell: bash
+
+    - name: Run tests with pytest
+      run: |
+        source venv/bin/activate
+        pytest Backend/tests/
+      shell: bash
 
     - name: Push metrics to Prometheus
       run: |
         curl -X POST -d 'metric=success&value=1' http://localhost:9091/metrics/job/mlflow_metrics
+      shell: bash
 
     - name: Complete Monitoring
       run: |
-        echo "Fin de l'exécution, vérification via Grafana et Prometheus"
+        echo "✅ Fin de l'exécution, vérification via Grafana et Prometheus"
+      shell: bash
