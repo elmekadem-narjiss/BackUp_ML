@@ -16,11 +16,6 @@ jobs:
     - name: Checkout code
       uses: actions/checkout@v2
 
-    - name: Patch keras import in lstm_model.py
-      run: |
-        sed -i 's/from keras\.api\.models/from tensorflow.keras.models/' Backend/app/services/lstm_model.py
-      shell: bash
-
     - name: Set up Python
       uses: actions/setup-python@v2
       with:
@@ -39,11 +34,18 @@ jobs:
         echo "tensorflow" >> requirements.txt
         echo "httpx" >> requirements.txt
         echo "pytest" >> requirements.txt
+        echo "redis" >> requirements.txt
         # Installation des dépendances
         pip install -r requirements.txt
         pip install pulp==2.7.0
         # Vérifie que snakemake est bien installé
         command -v snakemake || echo "⚠️ Snakemake non trouvé"
+      shell: bash
+
+    - name: Patch keras import in lstm_model.py
+      run: |
+        sed -i 's/from keras\.api\.models/from tensorflow.keras.models/' Backend/app/services/lstm_model.py
+        sed -i 's/from keras\.api\.layers/from tensorflow.keras.layers/' Backend/app/services/lstm_model.py
       shell: bash
 
     - name: Create basic Snakefile if missing
