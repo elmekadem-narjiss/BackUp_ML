@@ -26,18 +26,22 @@ jobs:
         python -m venv venv
         source venv/bin/activate
         python -m pip install --upgrade pip
-        echo "mlflow" > requirements.txt
-        echo "prometheus_client" >> requirements.txt
-        echo "snakemake" >> requirements.txt
-        echo "fastapi" >> requirements.txt
-        echo "tensorflow" >> requirements.txt
-        echo "httpx" >> requirements.txt
-        echo "pytest" >> requirements.txt
-        echo "psycopg2-binary" >> requirements.txt
-        echo "redis" >> requirements.txt
-        echo "influxdb-client" >> requirements.txt
-        echo "statsmodels" >> requirements.txt  
-        echo "paho-mqtt" >> requirements.txt
+
+        cat <<EOF > requirements.txt
+        mlflow
+        prometheus_client
+        snakemake
+        fastapi
+        tensorflow
+        httpx
+        pytest
+        psycopg2-binary
+        redis
+        influxdb-client
+        statsmodels
+        paho-mqtt
+        EOF
+
         pip install -r requirements.txt
         pip install pulp==2.7.0
         command -v snakemake || echo "⚠️ Snakemake non trouvé"
@@ -65,15 +69,17 @@ jobs:
     - name: Create basic Snakefile if missing
       run: |
         if [ ! -f Snakefile ]; then
-          echo "rule all:" > Snakefile
-          echo "  input:" >> Snakefile
-          echo "    'results/output.txt'" >> Snakefile
-          echo "" >> Snakefile
-          echo "rule example:" >> Snakefile
-          echo "  output:" >> Snakefile
-          echo "    'results/output.txt'" >> Snakefile
-          echo "  shell:" >> Snakefile
-          echo "    'mkdir -p results && echo Hello > results/output.txt'" >> Snakefile
+          cat <<EOF > Snakefile
+rule all:
+  input:
+    'results/output.txt'
+
+rule example:
+  output:
+    'results/output.txt'
+  shell:
+    'mkdir -p results && echo Hello > results/output.txt'
+EOF
         fi
       shell: bash
 
@@ -93,9 +99,10 @@ jobs:
     - name: Push metrics to Prometheus
       run: |
         # Vérification de l'état des métriques dans PushGateway avant d'envoyer
-        curl -X GET http://localhost:9090/metrics/job/mlflow_metrics || echo "Pas de métriques existantes"
+        curl -X GET http://localhost:9091/metrics/job/mlflow_metrics || echo "Pas de métriques existantes"
+        
         # Envoi de la métrique
-        curl -X POST -d 'mlflow_metrics{metric="success"} 1.0' http://localhost:9090/metrics/job/mlflow_metrics
+        curl -X POST -d 'mlflow_metrics{metric="success"} 1.0' http://localhost:9091/metrics/job/mlflow_metrics
       shell: bash
 
     - name: Complete Monitoring
