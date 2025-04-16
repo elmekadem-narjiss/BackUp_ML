@@ -69,10 +69,15 @@ jobs:
         snakemake --cores 4
       shell: bash
 
+    - name: Check if tests directory exists
+      run: |
+        ls -l Backend/tests/
+      shell: bash
+
     - name: Run tests with pytest
       run: |
         source venv/bin/activate
-        pytest tests/
+        pytest Backend/tests/
       shell: bash
 
     - name: Push metrics to Prometheus
