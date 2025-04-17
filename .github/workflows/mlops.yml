@@ -41,69 +41,48 @@ jobs:
           echo "✅ MLFlow est prêt."
         shell: bash
 
-      - name: Create a new run in MLFlow
+      - name: Create a new run and log metrics to MLFlow
         run: |
           echo "📡 Création d'un nouveau run dans MLFlow..."
-          response=$(curl -X POST -H "Content-Type: application/json" \
+          run_response=$(curl -s -X POST -H "Content-Type: application/json" \
             -d '{
                   "experiment_id": "0", 
-                  "run_name": "GitHub_Run_$(date +%Y%m%d%H%M%S)",
-                  "start_time": $(date +%s000)
+                  "run_name": "GitHub_Run_'"$(date +%Y%m%d%H%M%S)"'",
+                  "start_time": '$(date +%s000)'
                 }' \
             $MLFLOW_URL/api/2.0/mlflow/runs/create)
-          run_id=$(echo $response | jq -r '.run.info.run_id')
+
+          run_id=$(echo "$run_response" | jq -r '.run.info.run_id')
           echo "✅ Run créé avec l'ID: $run_id"
+
+          echo "📊 Envoi de métriques simulées à MLFlow..."
+          curl -s -X POST -H "Content-Type: application/json" \
+            -d '{
+                  "run_id": "'"$run_id"'",
+                  "key": "accuracy",
+                  "value": 0.95,
+                  "timestamp": '$(date +%s000)',
+                  "step": 1
+                }' \
+            $MLFLOW_URL/api/2.0/mlflow/runs/log-metric
+
+          curl -s -X POST -H "Content-Type: application/json" \
+            -d '{
+                  "run_id": "'"$run_id"'",
+                  "key": "loss",
+                  "value": 0.05,
+                  "timestamp": '$(date +%s000)',
+                  "step": 1
+                }' \
+            $MLFLOW_URL/api/2.0/mlflow/runs/log-metric
+
+          echo "✅ Métriques enregistrées dans MLFlow."
         shell: bash
 
       - name: Start Prometheus PushGateway
         run: |
           docker run -d -p 9091:9091 prom/pushgateway
           sleep 5
-        shell: bash
-
-      - name: Fetch and push MLFlow metrics to Prometheus
-        run: |
-          source venv/bin/activate
-          echo "📡 Interrogation de MLFlow..."
-          response=$(curl -s -H "Content-Type: application/json" \
-            -d '{"max_results": 100}' \
-            "$MLFLOW_URL/api/2.0/mlflow/experiments/search")
-          if echo "$response" | jq -e '.experiments != null and (.experiments | length > 0)' > /dev/null; then
-            echo "✅ Réponse valide de MLFlow :"
-            echo "$response"
-            experiments=$(echo "$response" | jq -r '.experiments[].experiment_id')
-            for exp in $experiments; do
-              echo "🔍 Expérience ID: $exp"
-              runs=$(curl -s -H "Content-Type: application/json" \
-                -d "{\"experiment_ids\": [\"$exp\"]}" \
-                $MLFLOW_URL/api/2.0/mlflow/runs/search)
-              if echo "$runs" | jq -e '.runs != null and (.runs | length > 0)' > /dev/null; then
-                run_ids=$(echo "$runs" | jq -r '.runs[].info.run_id')
-                for run in $run_ids; do
-                  echo "📊 Analyse du run: $run"
-                  metrics_response=$(curl -s $MLFLOW_URL/api/2.0/mlflow/runs/get?run_id=$run)
-                  if echo "$metrics_response" | jq -e '.run.data.metrics != null and (.run.data.metrics | length > 0)' > /dev/null; then
-                    metrics=$(echo "$metrics_response" | jq -r '.run.data.metrics')
-                    echo "$metrics" | jq -c 'to_entries[]' | while read -r metric_entry; do
-                      key=$(echo "$metric_entry" | jq -r '.key')
-                      value=$(echo "$metric_entry" | jq -r '.value')
-                      echo "Envoi de la métrique: $key{experiment=\"$exp\",run=\"$run\"} $value"
-                      echo "$key{experiment=\"$exp\",run=\"$run\"} $value" \
-                        | curl --data-binary @- http://localhost:9091/metrics/job/mlflow_metrics
-                    done
-                  else
-                    echo "⚠️ Aucune métrique trouvée pour le run $run."
-                  fi
-                done
-              else
-                echo "⚠️ Aucun run trouvé pour l'expérience $exp."
-              fi
-            done
-          else
-            echo "❌ Aucune expérience trouvée dans MLFlow."
-            echo "$response"
-            exit 1
-          fi
         shell: bash
 
       - name: Push global success metric to Prometheus
