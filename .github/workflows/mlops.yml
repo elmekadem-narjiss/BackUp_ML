@@ -1,41 +1,61 @@
-name: MLFlow to Prometheus
+name: MLFlow and Snakemake Workflow
 
 on:
-  workflow_dispatch:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
 
 jobs:
-  export_metrics:
+  build:
     runs-on: ubuntu-latest
+
     steps:
       - name: Checkout code
-        uses: actions/checkout@v3
+        uses: actions/checkout@v2
 
-      - name: Setup Python
-        uses: actions/setup-python@v4
+      - name: Set up Python
+        uses: actions/setup-python@v2
         with:
-          python-version: '3.10'
+          python-version: '3.8'
 
-      - name: Install dependencies
+      - name: Set up virtual environment and install dependencies
         run: |
           python -m venv venv
           source venv/bin/activate
-          pip install -r Backend_ML/requirements.txt
+          pip install --upgrade pip
+          pip install mlflow prometheus_client snakemake pulp==2.7.0 jq
+        shell: bash
 
-      - name: Export metrics from MLFlow to Prometheus
+      - name: Start MLFlow server
         run: |
           source venv/bin/activate
-          cd Backend_ML/app/mlflow || exit 1
+          nohup mlflow ui --host 0.0.0.0 --port 5000 &
+          sleep 10
+        shell: bash
+
+      - name: Start Prometheus PushGateway
+        run: |
+          docker run -d -p 9091:9091 prom/pushgateway
+          sleep 5
+        shell: bash
+
+      - name: Fetch and push MLFlow metrics to Prometheus
+        run: |
+          source venv/bin/activate
 
           echo "📡 Interrogation de MLFlow..."
-          response=$(curl -s -H "Content-Type: application/json" -d '{"max_results": 100}' http://localhost:5000/api/2.0/mlflow/experiments/search)
+          response=$(curl -s -H "Content-Type: application/json" \
+            -d '{"max_results": 100}' \
+            "http://localhost:5000/api/2.0/mlflow/experiments/search")
 
-          if echo "$response" | jq -e '.experiments != null' > /dev/null; then
+          if echo "$response" | jq -e '.experiments != null and (.experiments | length > 0)' > /dev/null; then
             echo "✅ Réponse valide de MLFlow :"
             echo "$response"
 
-            experiment_ids=$(echo "$response" | jq -r '.experiments[].experiment_id')
+            experiments=$(echo "$response" | jq -r '.experiments[].experiment_id')
 
-            for exp in $experiment_ids; do
+            for exp in $experiments; do
               echo "🔍 Expérience ID: $exp"
               runs=$(curl -s -H "Content-Type: application/json" \
                 -d "{\"experiment_ids\": [\"$exp\"]}" \
@@ -48,7 +68,7 @@ jobs:
                   echo "📊 Analyse du run: $run"
                   metrics_response=$(curl -s http://localhost:5000/api/2.0/mlflow/runs/get?run_id=$run)
 
-                  if echo "$metrics_response" | jq -e '.run.data.metrics != null' > /dev/null; then
+                  if echo "$metrics_response" | jq -e '.run.data.metrics != null and (.run.data.metrics | length > 0)' > /dev/null; then
                     metrics=$(echo "$metrics_response" | jq -r '.run.data.metrics')
 
                     echo "$metrics" | jq -c 'to_entries[]' | while read -r metric_entry; do
@@ -66,7 +86,22 @@ jobs:
               fi
             done
           else
-            echo "❌ Erreur dans la réponse de MLFlow lors de la récupération des expériences."
+            echo "❌ Aucune expérience trouvée dans MLFlow."
             echo "$response"
             exit 1
           fi
+        shell: bash
+
+      - name: Push global success metric to Prometheus
+        run: |
+          echo "success 1" | curl --data-binary @- http://127.0.0.1:9091/metrics/job/mlflow_metrics
+        shell: bash
+
+      - name: Check metrics in PushGateway
+        run: |
+          curl http://127.0.0.1:9091/metrics | grep -E 'success|execution_duration_seconds|step_status' || echo "⚠️ Certaines métriques manquent"
+        shell: bash
+
+      - name: Complete Monitoring
+        run: echo "✅ Fin de l'exécution, vérification via Grafana et Prometheus"
+        shell: bash
