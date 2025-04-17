@@ -91,10 +91,17 @@ jobs:
                       # Nettoyer le nom de la métrique (remplacer tout caractère non alphanumérique ou underscore par "_")
                       key=$(echo "$raw_key" | sed 's/[^a-zA-Z0-9_]/_/g' | tr -s '_')
 
+                      # Vérifier si le nom de la métrique est valide
+                      if [[ ! "$key" =~ ^[a-zA-Z0-9_]+$ ]]; then
+                        echo "⚠️ Nom de métrique invalide: $key. Il a été ignoré."
+                        continue
+                      fi
+
                       # Afficher le nom et la valeur de la métrique pour le débogage
                       echo "Nom de la métrique : $key"
                       echo "Valeur : $value"
 
+                      # Envoyer la métrique à Prometheus
                       echo "$key{experiment=\"$exp\",run=\"$run\"} $value" \
                         | curl --data-binary @- http://localhost:9091/metrics/job/mlflow_metrics
                     done
