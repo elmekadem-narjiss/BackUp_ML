@@ -60,7 +60,7 @@ jobs:
               echo "🆕 Aucun run trouvé pour l'expérience $exp. Création d’un run test..."
               cat <<EOF > inject_run.py
 import mlflow
-mlflow.set_experiment(experiment_id="${exp}")
+mlflow.set_experiment(experiment_id="$exp")
 with mlflow.start_run():
     mlflow.log_param("auto_created", True)
     mlflow.log_metric("test_metric", 0.99)
