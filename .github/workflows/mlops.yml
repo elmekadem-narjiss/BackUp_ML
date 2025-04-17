@@ -51,25 +51,59 @@ jobs:
       run: |
         source venv/bin/activate
 
-        # Récupérer les expériences et runs depuis MLFlow
-        experiments=$(curl -s "http://localhost:5000/api/2.0/mlflow/experiments/list" | jq -r '.experiments[].experiment_id')
-
-        for exp in $experiments; do
-          # Récupérer les runs d'une expérience
-          runs=$(curl -s "http://localhost:5000/api/2.0/mlflow/runs/search?experiment_ids=$exp" | jq -r '.runs[].run_id')
+        # Récupérer les expériences depuis MLFlow
+        response=$(curl -s "http://localhost:5000/api/2.0/mlflow/experiments/list")
+        
+        # Vérifier si la réponse est valide avant de l'utiliser avec jq
+        if echo "$response" | jq empty; then
+          echo "Réponse valide de MLFlow :"
+          echo "$response"
           
-          for run in $runs; do
-            # Récupérer les métriques d'un run spécifique
-            metrics=$(curl -s "http://localhost:5000/api/2.0/mlflow/runs/get?run_id=$run" | jq -r '.data.metrics')
-
-            for metric in $(echo "$metrics" | jq -r 'keys[]'); do
-              value=$(echo "$metrics" | jq -r ".\"$metric\"")
+          # Extraire les expériences
+          experiments=$(echo "$response" | jq -r '.experiments[].experiment_id')
+          
+          for exp in $experiments; do
+            # Récupérer les runs d'une expérience
+            runs=$(curl -s "http://localhost:5000/api/2.0/mlflow/runs/search?experiment_ids=$exp")
+            
+            # Vérifier la validité de la réponse des runs
+            if echo "$runs" | jq empty; then
+              echo "Réponse valide des runs :"
+              echo "$runs"
               
-              # Pousser la métrique vers Prometheus
-              echo "$metric{$exp=\"$run\"} $value" | curl --data-binary @- http://localhost:9091/metrics/job/mlflow_metrics
-            done
+              # Extraire les run_ids
+              run_ids=$(echo "$runs" | jq -r '.runs[].run_id')
+              
+              for run in $run_ids; do
+                # Récupérer les métriques d'un run
+                metrics_response=$(curl -s "http://localhost:5000/api/2.0/mlflow/runs/get?run_id=$run")
+                
+                # Vérifier la validité de la réponse des métriques
+                if echo "$metrics_response" | jq empty; then
+                  echo "Réponse valide des métriques :"
+                  echo "$metrics_response"
+                  
+                  metrics=$(echo "$metrics_response" | jq -r '.data.metrics')
+                  
+                  for metric in $(echo "$metrics" | jq -r 'keys[]'); do
+                    value=$(echo "$metrics" | jq -r ".\"$metric\"")
+                    
+                    # Pousser la métrique vers Prometheus
+                    echo "$metric{$exp=\"$run\"} $value" | curl --data-binary @- http://localhost:9091/metrics/job/mlflow_metrics
+                  done
+                else
+                  echo "Erreur dans la récupération des métriques pour le run $run."
+                fi
+              done
+            else
+              echo "Erreur dans la récupération des runs pour l'expérience $exp."
+            fi
           done
-        done
+        else
+          echo "Erreur dans la réponse de MLFlow lors de la récupération des expériences."
+          echo "$response"
+          exit 1
+        fi
       shell: bash
 
     - name: Push global success metric to Prometheus
