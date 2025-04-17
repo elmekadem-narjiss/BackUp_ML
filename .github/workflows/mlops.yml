@@ -2,11 +2,9 @@ name: MLFlow and Snakemake Workflow
 
 on:
   push:
-    branches:
-      - main
+    branches: [main]
   pull_request:
-    branches:
-      - main
+    branches: [main]
 
 jobs:
   build:
@@ -25,13 +23,8 @@ jobs:
       run: |
         python -m venv venv
         source venv/bin/activate
-        python -m pip install --upgrade pip
-        echo "mlflow" > requirements.txt
-        echo "prometheus_client" >> requirements.txt
-        echo "snakemake" >> requirements.txt
-        pip install -r requirements.txt
-        pip install pulp==2.7.0
-        command -v snakemake || echo "⚠️ Snakemake non trouvé"
+        pip install --upgrade pip
+        pip install mlflow prometheus_client snakemake pulp==2.7.0
       shell: bash
 
     - name: Start MLFlow server
@@ -47,50 +40,43 @@ jobs:
         sleep 5
       shell: bash
 
-    - name: Run MLflow experiment listing script
-      run: |
-        source venv/bin/activate
-        cd Backend/app/mlflow
-        echo "🔍 Liste des expériences MLflow :"
-        python list_expriment.py
-        cd -
-      shell: bash
-
     - name: Fetch and push MLFlow metrics to Prometheus
       run: |
         source venv/bin/activate
 
-        # Récupérer les expériences depuis MLFlow via API
-        response=$(curl -s "http://localhost:5000/api/2.0/mlflow/experiments/list")
-        
+        # Récupérer les expériences
+        response=$(curl -s -H "Content-Type: application/json" -d '{"max_results": 100}' "http://localhost:5000/api/2.0/mlflow/experiments/search")
+
         if echo "$response" | jq empty; then
-          echo "Réponse valide de MLFlow :"
+          echo "✅ Réponse valide de MLFlow :"
           echo "$response"
-          
+
           experiments=$(echo "$response" | jq -r '.experiments[].experiment_id')
-          
+
           for exp in $experiments; do
-            runs=$(curl -s "http://localhost:5000/api/2.0/mlflow/runs/search?experiment_ids=$exp")
-            
+            # Récupérer les runs
+            runs=$(curl -s -H "Content-Type: application/json" -d "{\"experiment_ids\": [\"$exp\"]}" http://localhost:5000/api/2.0/mlflow/runs/search)
+
             if echo "$runs" | jq empty; then
-              run_ids=$(echo "$runs" | jq -r '.runs[].run_id')
-              
+              run_ids=$(echo "$runs" | jq -r '.runs[].info.run_id')
+
               for run in $run_ids; do
-                metrics_response=$(curl -s "http://localhost:5000/api/2.0/mlflow/runs/get?run_id=$run")
-                
+                metrics_response=$(curl -s http://localhost:5000/api/2.0/mlflow/runs/get?run_id=$run)
+
                 if echo "$metrics_response" | jq empty; then
-                  metrics=$(echo "$metrics_response" | jq -r '.data.metrics')
-                  
-                  for metric in $(echo "$metrics" | jq -r 'keys[]'); do
-                    value=$(echo "$metrics" | jq -r ".\"$metric\"")
-                    echo "$metric{$exp=\"$run\"} $value" | curl --data-binary @- http://localhost:9091/metrics/job/mlflow_metrics
+                  metrics=$(echo "$metrics_response" | jq -r '.run.data.metrics')
+
+                  echo "$metrics" | jq -c 'to_entries[]' | while read -r metric_entry; do
+                    key=$(echo "$metric_entry" | jq -r '.key')
+                    value=$(echo "$metric_entry" | jq -r '.value')
+                    echo "$key{experiment=\"$exp\",run=\"$run\"} $value" | curl --data-binary @- http://localhost:9091/metrics/job/mlflow_metrics
                   done
                 else
-                  echo "❌ Erreur lors de la récupération des métriques pour le run $run."
+                  echo "❌ Erreur dans la récupération des métriques pour le run $run."
                 fi
               done
             else
-              echo "❌ Erreur lors de la récupération des runs pour l'expérience $exp."
+              echo "❌ Erreur dans la récupération des runs pour l'expérience $exp."
             fi
           done
         else
