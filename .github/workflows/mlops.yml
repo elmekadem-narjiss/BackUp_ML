@@ -43,7 +43,6 @@ jobs:
       - name: Fetch and push MLFlow metrics to Prometheus
         run: |
           source venv/bin/activate
-
           echo "📡 Interrogation de MLFlow..."
           response=$(curl -s -H "Content-Type: application/json" \
             -d '{"max_results": 100}' \
@@ -74,6 +73,7 @@ jobs:
                     echo "$metrics" | jq -c 'to_entries[]' | while read -r metric_entry; do
                       key=$(echo "$metric_entry" | jq -r '.key')
                       value=$(echo "$metric_entry" | jq -r '.value')
+                      echo "Envoi de la métrique: $key{experiment=\"$exp\",run=\"$run\"} $value"
                       echo "$key{experiment=\"$exp\",run=\"$run\"} $value" \
                         | curl --data-binary @- http://localhost:9091/metrics/job/mlflow_metrics
                     done
@@ -99,6 +99,7 @@ jobs:
 
       - name: Check metrics in PushGateway
         run: |
+          echo "Vérification des métriques dans PushGateway..."
           curl http://127.0.0.1:9091/metrics | grep -E 'success|execution_duration_seconds|step_status' || echo "⚠️ Certaines métriques manquent"
         shell: bash
 
