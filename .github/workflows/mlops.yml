@@ -30,36 +30,6 @@ jobs:
           pip install mlflow prometheus_client snakemake pulp==2.7.0 jq
         shell: bash
 
-      - name: Create a new run in MLFlow
-        run: |
-          echo "📡 Création d'un nouveau run dans MLFlow..."
-          timestamp=$(date +%Y%m%d%H%M%S)
-          start_time=$(date +%s000)
-          response=$(curl -s -X POST -H "Content-Type: application/json" \
-            -d "{\"experiment_id\": \"0\", \"run_name\": \"GitHub_Run_$timestamp\", \"start_time\": $start_time}" \
-            $MLFLOW_URL/api/2.0/mlflow/runs/create)
-          run_id=$(echo $response | jq -r '.run.info.run_id')
-          echo "✅ Run créé avec l'ID: $run_id"
-        shell: bash
-
-      - name: Train the model and log metrics to MLFlow
-        run: |
-          source venv/bin/activate
-          echo "📡 Entraînement du modèle et log des métriques dans MLFlow..."
-          
-          # Exemple d'entraînement d'un modèle (assurez-vous de remplacer cette section par votre code réel d'entraînement)
-          python train_model.py  # Exécutez votre script d'entraînement ici
-
-          # Log des métriques
-          for epoch in $(seq 1 10); do
-            loss=$(python -c "import random; print(random.uniform(0, 1))")  # Remplacer par votre calcul de loss
-            accuracy=$(python -c "import random; print(random.uniform(0, 1))")  # Remplacer par votre calcul de précision
-            mlflow.log_metric("loss", $loss, step=$epoch)
-            mlflow.log_metric("accuracy", $accuracy, step=$epoch)
-            echo "📊 Enregistré loss=$loss et accuracy=$accuracy pour l'époque $epoch"
-          done
-        shell: bash
-
       - name: Start Prometheus PushGateway
         run: |
           docker run -d -p 9091:9091 prom/pushgateway
@@ -73,6 +43,7 @@ jobs:
           response=$(curl -s -H "Content-Type: application/json" \
             -d '{"max_results": 100}' \
             "$MLFLOW_URL/api/2.0/mlflow/experiments/search")
+          
           if echo "$response" | jq -e '.experiments != null and (.experiments | length > 0)' > /dev/null; then
             echo "✅ Réponse valide de MLFlow :"
             echo "$response"
@@ -92,9 +63,9 @@ jobs:
                     echo "$metrics" | jq -c 'to_entries[]' | while read -r metric_entry; do
                       raw_key=$(echo "$metric_entry" | jq -r '.key')
                       value=$(echo "$metric_entry" | jq -r '.value')
-                      # Remplacement des caractères non alphanumériques
+                      # Replace non-alphanumeric characters in the metric name
                       key=$(echo "$raw_key" | sed 's/[^a-zA-Z0-9_]/_/g' | sed 's/^__*//; s/__*$//' | tr -s '_')
-                      # Validation du nom de la métrique
+                      # Validate metric name
                       if [[ ! "$key" =~ ^[a-zA-Z_:][a-zA-Z0-9_:]*$ ]]; then
                         echo "⚠️ Nom de métrique invalide: '$key'. Il a été ignoré."
                         continue
