@@ -74,7 +74,9 @@ jobs:
                     echo "$metrics" | jq -c 'to_entries[]' | while read -r metric_entry; do
                       raw_key=$(echo "$metric_entry" | jq -r '.key')
                       value=$(echo "$metric_entry" | jq -r '.value')
+                      # Replace non-alphanumeric characters in the metric name
                       key=$(echo "$raw_key" | sed 's/[^a-zA-Z0-9_]/_/g' | sed 's/^__*//; s/__*$//' | tr -s '_')
+                      # Validate metric name
                       if [[ ! "$key" =~ ^[a-zA-Z_:][a-zA-Z0-9_:]*$ ]]; then
                         echo "⚠️ Nom de métrique invalide: '$key'. Il a été ignoré."
                         continue
