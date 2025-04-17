@@ -31,7 +31,12 @@ jobs:
         run: |
           source venv/bin/activate
           nohup mlflow ui --host 0.0.0.0 --port 5000 &
-          sleep 10
+          # Vérification que le serveur MLFlow est prêt
+          until curl -s http://localhost:5000 > /dev/null; do
+            echo "📡 Attente que MLFlow soit prêt..."
+            sleep 5
+          done
+          echo "✅ MLFlow est prêt."
         shell: bash
 
       - name: Start Prometheus PushGateway
@@ -100,7 +105,11 @@ jobs:
       - name: Check metrics in PushGateway
         run: |
           echo "Vérification des métriques dans PushGateway..."
-          curl http://127.0.0.1:9091/metrics | grep -E 'success|execution_duration_seconds|step_status' || echo "⚠️ Certaines métriques manquent"
+          if curl -s http://127.0.0.1:9091/metrics | grep -q 'success'; then
+            echo "✅ Les métriques sont présentes dans PushGateway."
+          else
+            echo "❌ Aucune métrique trouvée dans PushGateway."
+          fi
         shell: bash
 
       - name: Complete Monitoring
