@@ -50,9 +50,9 @@ jobs:
     - name: Run MLflow experiment listing script
       run: |
         source venv/bin/activate
-        cd Backend_ML/app/mlflow
+        cd Backend/app/mlflow
         echo "🔍 Liste des expériences MLflow :"
-        python list_experiment.py
+        python list_expriment.py
         cd -
       shell: bash
 
