@@ -30,12 +30,28 @@ jobs:
       - name: Start MLFlow server
         run: |
           source venv/bin/activate
-          nohup mlflow ui --host 0.0.0.0 --port 5000 &
+          nohup mlflow ui --host 0.0.0.0 --port 5000 & 
+          # Vérification que le serveur MLFlow est prêt
           until curl -s http://localhost:5000 > /dev/null; do
             echo "📡 Attente que MLFlow soit prêt..."
             sleep 5
           done
           echo "✅ MLFlow est prêt."
+        shell: bash
+
+      - name: Create a new run in MLFlow
+        run: |
+          # Créer un nouveau run dans MLFlow
+          echo "📡 Création d'un nouveau run dans MLFlow..."
+          response=$(curl -X POST -H "Content-Type: application/json" \
+            -d '{
+                  "experiment_id": "0", 
+                  "run_name": "GitHub_Run_$(date +%Y%m%d%H%M%S)",
+                  "start_time": $(date +%s000)
+                }' \
+            http://localhost:5000/api/2.0/mlflow/runs/create)
+          run_id=$(echo $response | jq -r '.run.info.run_id')
+          echo "✅ Run créé avec l'ID: $run_id"
         shell: bash
 
       - name: Start Prometheus PushGateway
@@ -51,25 +67,20 @@ jobs:
           response=$(curl -s -H "Content-Type: application/json" \
             -d '{"max_results": 100}' \
             "http://localhost:5000/api/2.0/mlflow/experiments/search")
-          
           if echo "$response" | jq -e '.experiments != null and (.experiments | length > 0)' > /dev/null; then
             echo "✅ Réponse valide de MLFlow :"
             echo "$response"
             experiments=$(echo "$response" | jq -r '.experiments[].experiment_id')
-            
-            # Boucle sur toutes les expériences, y compris celles sans "runs"
             for exp in $experiments; do
               echo "🔍 Expérience ID: $exp"
               runs=$(curl -s -H "Content-Type: application/json" \
                 -d "{\"experiment_ids\": [\"$exp\"]}" \
                 http://localhost:5000/api/2.0/mlflow/runs/search)
-              
               if echo "$runs" | jq -e '.runs != null and (.runs | length > 0)' > /dev/null; then
                 run_ids=$(echo "$runs" | jq -r '.runs[].info.run_id')
                 for run in $run_ids; do
                   echo "📊 Analyse du run: $run"
                   metrics_response=$(curl -s http://localhost:5000/api/2.0/mlflow/runs/get?run_id=$run)
-                  
                   if echo "$metrics_response" | jq -e '.run.data.metrics != null and (.run.data.metrics | length > 0)' > /dev/null; then
                     metrics=$(echo "$metrics_response" | jq -r '.run.data.metrics')
                     echo "$metrics" | jq -c 'to_entries[]' | while read -r metric_entry; do
