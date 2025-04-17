@@ -29,58 +29,9 @@ jobs:
         echo "mlflow" > requirements.txt
         echo "prometheus_client" >> requirements.txt
         echo "snakemake" >> requirements.txt
-        echo "fastapi" >> requirements.txt
-        echo "tensorflow" >> requirements.txt
-        echo "httpx" >> requirements.txt
-        echo "pytest" >> requirements.txt
-        echo "psycopg2-binary" >> requirements.txt
-        echo "redis" >> requirements.txt
-        echo "influxdb-client" >> requirements.txt
-        echo "statsmodels" >> requirements.txt  
-        echo "paho-mqtt" >> requirements.txt
         pip install -r requirements.txt
         pip install pulp==2.7.0
         command -v snakemake || echo "⚠️ Snakemake non trouvé"
-      shell: bash
-
-    - name: Patch keras import in lstm_model.py
-      run: |
-        sed -i 's/from keras\.api\.models/from tensorflow.keras.models/' Backend/app/services/lstm_model.py
-        sed -i 's/from keras\.api\.layers/from tensorflow.keras.layers/' Backend/app/services/lstm_model.py
-        sed -i 's/from keras\.api\.losses/from tensorflow.keras.losses/' Backend/app/services/lstm_model.py
-      shell: bash
-
-    - name: Patch unpacking error in lstm_model.py
-      run: |
-        sed -i 's/model, scaler, history, X, y = train_and_save()/model, scaler = train_and_save()/' Backend/app/services/lstm_model.py
-      shell: bash
-
-    - name: Patch to comment out history usage in lstm_model.py
-      run: |
-        sed -i '/plt\.plot(history\.history/d' Backend/app/services/lstm_model.py
-        sed -i '/plt\.legend()/d' Backend/app/services/lstm_model.py
-        sed -i '/plt\.show()/d' Backend/app/services/lstm_model.py
-      shell: bash
-
-    - name: Create basic Snakefile if missing
-      run: |
-        if [ ! -f Snakefile ]; then
-          echo "rule all:" > Snakefile
-          echo "  input:" >> Snakefile
-          echo "    'results/output.txt'" >> Snakefile
-          echo "" >> Snakefile
-          echo "rule example:" >> Snakefile
-          echo "  output:" >> Snakefile
-          echo "    'results/output.txt'" >> Snakefile
-          echo "  shell:" >> Snakefile
-          echo "    'mkdir -p results && echo Hello > results/output.txt'" >> Snakefile
-        fi
-      shell: bash
-
-    - name: Start Prometheus PushGateway
-      run: |
-        docker run -d -p 9091:9091 prom/pushgateway
-        sleep 5
       shell: bash
 
     - name: Start MLFlow server
@@ -90,32 +41,40 @@ jobs:
         sleep 10
       shell: bash
 
-    - name: Start execution timer
-      id: start-timer
-      run: echo "start_time=$(date +%s)" >> $GITHUB_ENV
+    - name: Start Prometheus PushGateway
+      run: |
+        docker run -d -p 9091:9091 prom/pushgateway
+        sleep 5
       shell: bash
 
-    - name: Run Snakemake pipeline and push status metric
+    - name: Fetch and push MLFlow metrics to Prometheus
       run: |
         source venv/bin/activate
-        if snakemake --cores 4; then
-          echo "step_status{step=\"snakemake_pipeline\"} 1" | curl --data-binary @- http://127.0.0.1:9091/metrics/job/mlflow_metrics
-        else
-          echo "step_status{step=\"snakemake_pipeline\"} 0" | curl --data-binary @- http://127.0.0.1:9091/metrics/job/mlflow_metrics
-          exit 1
-        fi
+
+        # Récupérer les expériences et runs depuis MLFlow
+        experiments=$(curl -s "http://localhost:5000/api/2.0/mlflow/experiments/list" | jq -r '.experiments[].experiment_id')
+
+        for exp in $experiments; do
+          # Récupérer les runs d'une expérience
+          runs=$(curl -s "http://localhost:5000/api/2.0/mlflow/runs/search?experiment_ids=$exp" | jq -r '.runs[].run_id')
+          
+          for run in $runs; do
+            # Récupérer les métriques d'un run spécifique
+            metrics=$(curl -s "http://localhost:5000/api/2.0/mlflow/runs/get?run_id=$run" | jq -r '.data.metrics')
+
+            for metric in $(echo "$metrics" | jq -r 'keys[]'); do
+              value=$(echo "$metrics" | jq -r ".\"$metric\"")
+              
+              # Pousser la métrique vers Prometheus
+              echo "$metric{$exp=\"$run\"} $value" | curl --data-binary @- http://localhost:9091/metrics/job/mlflow_metrics
+            done
+          done
+        done
       shell: bash
 
     - name: Push global success metric to Prometheus
       run: |
         echo "success 1" | curl --data-binary @- http://127.0.0.1:9091/metrics/job/mlflow_metrics
-      shell: bash
-
-    - name: Push execution duration metric
-      run: |
-        end_time=$(date +%s)
-        duration=$((end_time - $start_time))
-        echo "execution_duration_seconds ${duration}" | curl --data-binary @- http://127.0.0.1:9091/metrics/job/mlflow_metrics
       shell: bash
 
     - name: Check metrics in PushGateway
