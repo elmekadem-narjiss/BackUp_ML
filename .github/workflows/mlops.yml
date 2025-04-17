@@ -31,7 +31,6 @@ jobs:
         run: |
           source venv/bin/activate
           nohup mlflow ui --host 0.0.0.0 --port 5000 &
-          # Vérification que le serveur MLFlow est prêt
           until curl -s http://localhost:5000 > /dev/null; do
             echo "📡 Attente que MLFlow soit prêt..."
             sleep 5
@@ -45,17 +44,32 @@ jobs:
           sleep 5
         shell: bash
 
-      - name: Inject test run for empty experiment
+      - name: Inject test runs into experiments (if empty)
         run: |
-          echo '
+          source venv/bin/activate
+          echo "📥 Injection de runs tests dans MLflow (si nécessaire)..."
+          experiments=$(curl -s -H "Content-Type: application/json" \
+            -d '{"max_results": 100}' \
+            "http://localhost:5000/api/2.0/mlflow/experiments/search" \
+            | jq -r '.experiments[].experiment_id')
+          for exp in $experiments; do
+            runs=$(curl -s -H "Content-Type: application/json" \
+              -d "{\"experiment_ids\": [\"$exp\"]}" \
+              http://localhost:5000/api/2.0/mlflow/runs/search)
+            if ! echo "$runs" | jq -e '.runs != null and (.runs | length > 0)' > /dev/null; then
+              echo "🆕 Aucun run trouvé pour l'expérience $exp. Création d’un run test..."
+              cat <<EOF > inject_run.py
 import mlflow
-mlflow.set_experiment(experiment_id="0")
+mlflow.set_experiment(experiment_id="${exp}")
 with mlflow.start_run():
     mlflow.log_param("auto_created", True)
     mlflow.log_metric("test_metric", 0.99)
-' > inject_run.py
-          source venv/bin/activate
-          python inject_run.py
+EOF
+              python inject_run.py
+            else
+              echo "✅ Des runs existent déjà pour l'expérience $exp."
+            fi
+          done
         shell: bash
 
       - name: Fetch and push MLFlow metrics to Prometheus
@@ -65,29 +79,22 @@ with mlflow.start_run():
           response=$(curl -s -H "Content-Type: application/json" \
             -d '{"max_results": 100}' \
             "http://localhost:5000/api/2.0/mlflow/experiments/search")
-
           if echo "$response" | jq -e '.experiments != null and (.experiments | length > 0)' > /dev/null; then
             echo "✅ Réponse valide de MLFlow :"
             echo "$response"
-
             experiments=$(echo "$response" | jq -r '.experiments[].experiment_id')
-
             for exp in $experiments; do
               echo "🔍 Expérience ID: $exp"
               runs=$(curl -s -H "Content-Type: application/json" \
                 -d "{\"experiment_ids\": [\"$exp\"]}" \
                 http://localhost:5000/api/2.0/mlflow/runs/search)
-
               if echo "$runs" | jq -e '.runs != null and (.runs | length > 0)' > /dev/null; then
                 run_ids=$(echo "$runs" | jq -r '.runs[].info.run_id')
-
                 for run in $run_ids; do
                   echo "📊 Analyse du run: $run"
                   metrics_response=$(curl -s http://localhost:5000/api/2.0/mlflow/runs/get?run_id=$run)
-
                   if echo "$metrics_response" | jq -e '.run.data.metrics != null and (.run.data.metrics | length > 0)' > /dev/null; then
                     metrics=$(echo "$metrics_response" | jq -r '.run.data.metrics')
-
                     echo "$metrics" | jq -c 'to_entries[]' | while read -r metric_entry; do
                       key=$(echo "$metric_entry" | jq -r '.key')
                       value=$(echo "$metric_entry" | jq -r '.value')
