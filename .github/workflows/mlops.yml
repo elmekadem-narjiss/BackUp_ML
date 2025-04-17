@@ -57,26 +57,18 @@ jobs:
                 run_ids=$(echo "$runs" | jq -r '.runs[].info.run_id')
                 for run in $run_ids; do
                   echo "📊 Analyse du run: $run"
-                  metrics_response=$(curl -s "$MLFLOW_URL/api/2.0/mlflow/runs/get?run_id=$run")
-                  if echo "$metrics_response" | jq -e '.run.data.metrics != null and (.run.data.metrics | length > 0)' > /dev/null; then
-                    metrics=$(echo "$metrics_response" | jq -r '.run.data.metrics')
-                    echo "$metrics" | jq -c 'to_entries[]' | while read -r metric_entry; do
-                      raw_key=$(echo "$metric_entry" | jq -r '.key')
-                      value=$(echo "$metric_entry" | jq -r '.value')
-                      # Replace non-alphanumeric characters in the metric name
-                      key=$(echo "$raw_key" | sed 's/[^a-zA-Z0-9_]/_/g' | sed 's/^__*//; s/__*$//' | tr -s '_')
-                      # Validate metric name
-                      if [[ ! "$key" =~ ^[a-zA-Z_:][a-zA-Z0-9_:]*$ ]]; then
-                        echo "⚠️ Nom de métrique invalide: '$key'. Il a été ignoré."
-                        continue
-                      fi
-                      echo "Nom de la métrique : $key"
-                      echo "Valeur : $value"
-                      echo "$key{experiment=\"$exp\",run=\"$run\"} $value" \
+                  # Fetch the metrics for each run using get-history API
+                  metric_response=$(curl -s -X GET "$MLFLOW_URL/api/2.0/mlflow/metrics/get-history?run_id=$run&metric_key=scale")
+                  if echo "$metric_response" | jq -e '.history != null and (.history | length > 0)' > /dev/null; then
+                    metrics=$(echo "$metric_response" | jq -r '.history[] | .value')
+                    for metric_value in $metrics; do
+                      echo "Valeur de la métrique 'scale' : $metric_value"
+                      # Push metric to Prometheus
+                      echo "scale{experiment=\"$exp\",run=\"$run\"} $metric_value" \
                         | curl --data-binary @- http://localhost:9091/metrics/job/mlflow_metrics
                     done
                   else
-                    echo "⚠️ Aucune métrique trouvée pour le run $run."
+                    echo "⚠️ Aucune métrique 'scale' trouvée pour le run $run."
                   fi
                 done
               else
