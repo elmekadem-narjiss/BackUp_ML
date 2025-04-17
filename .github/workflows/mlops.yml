@@ -42,6 +42,24 @@ jobs:
           echo "✅ Run créé avec l'ID: $run_id"
         shell: bash
 
+      - name: Train the model and log metrics to MLFlow
+        run: |
+          source venv/bin/activate
+          echo "📡 Entraînement du modèle et log des métriques dans MLFlow..."
+          
+          # Exemple d'entraînement d'un modèle (assurez-vous de remplacer cette section par votre code réel d'entraînement)
+          python train_model.py  # Exécutez votre script d'entraînement ici
+
+          # Log des métriques
+          for epoch in $(seq 1 10); do
+            loss=$(python -c "import random; print(random.uniform(0, 1))")  # Remplacer par votre calcul de loss
+            accuracy=$(python -c "import random; print(random.uniform(0, 1))")  # Remplacer par votre calcul de précision
+            mlflow.log_metric("loss", $loss, step=$epoch)
+            mlflow.log_metric("accuracy", $accuracy, step=$epoch)
+            echo "📊 Enregistré loss=$loss et accuracy=$accuracy pour l'époque $epoch"
+          done
+        shell: bash
+
       - name: Start Prometheus PushGateway
         run: |
           docker run -d -p 9091:9091 prom/pushgateway
@@ -74,9 +92,9 @@ jobs:
                     echo "$metrics" | jq -c 'to_entries[]' | while read -r metric_entry; do
                       raw_key=$(echo "$metric_entry" | jq -r '.key')
                       value=$(echo "$metric_entry" | jq -r '.value')
-                      # Replace non-alphanumeric characters in the metric name
+                      # Remplacement des caractères non alphanumériques
                       key=$(echo "$raw_key" | sed 's/[^a-zA-Z0-9_]/_/g' | sed 's/^__*//; s/__*$//' | tr -s '_')
-                      # Validate metric name
+                      # Validation du nom de la métrique
                       if [[ ! "$key" =~ ^[a-zA-Z_:][a-zA-Z0-9_:]*$ ]]; then
                         echo "⚠️ Nom de métrique invalide: '$key'. Il a été ignoré."
                         continue
