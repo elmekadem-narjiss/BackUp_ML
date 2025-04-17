@@ -1,101 +1,72 @@
-name: MLFlow and Snakemake Workflow
+name: MLFlow to Prometheus
 
 on:
-  push:
-    branches: [main]
-  pull_request:
-    branches: [main]
+  workflow_dispatch:
 
 jobs:
-  build:
+  export_metrics:
     runs-on: ubuntu-latest
-
     steps:
-    - name: Checkout code
-      uses: actions/checkout@v2
+      - name: Checkout code
+        uses: actions/checkout@v3
 
-    - name: Set up Python
-      uses: actions/setup-python@v2
-      with:
-        python-version: '3.8'
+      - name: Setup Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.10'
 
-    - name: Set up virtual environment and install dependencies
-      run: |
-        python -m venv venv
-        source venv/bin/activate
-        pip install --upgrade pip
-        pip install mlflow prometheus_client snakemake pulp==2.7.0
-      shell: bash
+      - name: Install dependencies
+        run: |
+          python -m venv venv
+          source venv/bin/activate
+          pip install -r Backend_ML/requirements.txt
 
-    - name: Start MLFlow server
-      run: |
-        source venv/bin/activate
-        nohup mlflow ui --host 0.0.0.0 --port 5000 &
-        sleep 10
-      shell: bash
+      - name: Export metrics from MLFlow to Prometheus
+        run: |
+          source venv/bin/activate
+          cd Backend_ML/app/mlflow || exit 1
 
-    - name: Start Prometheus PushGateway
-      run: |
-        docker run -d -p 9091:9091 prom/pushgateway
-        sleep 5
-      shell: bash
+          echo "📡 Interrogation de MLFlow..."
+          response=$(curl -s -H "Content-Type: application/json" -d '{"max_results": 100}' http://localhost:5000/api/2.0/mlflow/experiments/search)
 
-    - name: Fetch and push MLFlow metrics to Prometheus
-      run: |
-        source venv/bin/activate
+          if echo "$response" | jq -e '.experiments != null' > /dev/null; then
+            echo "✅ Réponse valide de MLFlow :"
+            echo "$response"
 
-        # Récupérer les expériences
-        response=$(curl -s -H "Content-Type: application/json" -d '{"max_results": 100}' "http://localhost:5000/api/2.0/mlflow/experiments/search")
+            experiment_ids=$(echo "$response" | jq -r '.experiments[].experiment_id')
 
-        if echo "$response" | jq empty; then
-          echo "✅ Réponse valide de MLFlow :"
-          echo "$response"
+            for exp in $experiment_ids; do
+              echo "🔍 Expérience ID: $exp"
+              runs=$(curl -s -H "Content-Type: application/json" \
+                -d "{\"experiment_ids\": [\"$exp\"]}" \
+                http://localhost:5000/api/2.0/mlflow/runs/search)
 
-          experiments=$(echo "$response" | jq -r '.experiments[].experiment_id')
+              if echo "$runs" | jq -e '.runs != null and (.runs | length > 0)' > /dev/null; then
+                run_ids=$(echo "$runs" | jq -r '.runs[].info.run_id')
 
-          for exp in $experiments; do
-            # Récupérer les runs
-            runs=$(curl -s -H "Content-Type: application/json" -d "{\"experiment_ids\": [\"$exp\"]}" http://localhost:5000/api/2.0/mlflow/runs/search)
+                for run in $run_ids; do
+                  echo "📊 Analyse du run: $run"
+                  metrics_response=$(curl -s http://localhost:5000/api/2.0/mlflow/runs/get?run_id=$run)
 
-            if echo "$runs" | jq empty; then
-              run_ids=$(echo "$runs" | jq -r '.runs[].info.run_id')
+                  if echo "$metrics_response" | jq -e '.run.data.metrics != null' > /dev/null; then
+                    metrics=$(echo "$metrics_response" | jq -r '.run.data.metrics')
 
-              for run in $run_ids; do
-                metrics_response=$(curl -s http://localhost:5000/api/2.0/mlflow/runs/get?run_id=$run)
-
-                if echo "$metrics_response" | jq empty; then
-                  metrics=$(echo "$metrics_response" | jq -r '.run.data.metrics')
-
-                  echo "$metrics" | jq -c 'to_entries[]' | while read -r metric_entry; do
-                    key=$(echo "$metric_entry" | jq -r '.key')
-                    value=$(echo "$metric_entry" | jq -r '.value')
-                    echo "$key{experiment=\"$exp\",run=\"$run\"} $value" | curl --data-binary @- http://localhost:9091/metrics/job/mlflow_metrics
-                  done
-                else
-                  echo "❌ Erreur dans la récupération des métriques pour le run $run."
-                fi
-              done
-            else
-              echo "❌ Erreur dans la récupération des runs pour l'expérience $exp."
-            fi
-          done
-        else
-          echo "❌ Erreur dans la réponse de MLFlow lors de la récupération des expériences."
-          echo "$response"
-          exit 1
-        fi
-      shell: bash
-
-    - name: Push global success metric to Prometheus
-      run: |
-        echo "success 1" | curl --data-binary @- http://127.0.0.1:9091/metrics/job/mlflow_metrics
-      shell: bash
-
-    - name: Check metrics in PushGateway
-      run: |
-        curl http://127.0.0.1:9091/metrics | grep -E 'success|execution_duration_seconds|step_status' || echo "⚠️ Certaines métriques manquent"
-      shell: bash
-
-    - name: Complete Monitoring
-      run: echo "✅ Fin de l'exécution, vérification via Grafana et Prometheus"
-      shell: bash
+                    echo "$metrics" | jq -c 'to_entries[]' | while read -r metric_entry; do
+                      key=$(echo "$metric_entry" | jq -r '.key')
+                      value=$(echo "$metric_entry" | jq -r '.value')
+                      echo "$key{experiment=\"$exp\",run=\"$run\"} $value" \
+                        | curl --data-binary @- http://localhost:9091/metrics/job/mlflow_metrics
+                    done
+                  else
+                    echo "⚠️ Aucune métrique trouvée pour le run $run."
+                  fi
+                done
+              else
+                echo "⚠️ Aucun run trouvé pour l'expérience $exp."
+              fi
+            done
+          else
+            echo "❌ Erreur dans la réponse de MLFlow lors de la récupération des expériences."
+            echo "$response"
+            exit 1
+          fi
