@@ -31,7 +31,6 @@ jobs:
         run: |
           source venv/bin/activate
           nohup mlflow ui --host 0.0.0.0 --port 5000 &
-          # Vérification que le serveur MLFlow est prêt
           until curl -s http://localhost:5000 > /dev/null; do
             echo "📡 Attente que MLFlow soit prêt..."
             sleep 5
@@ -61,13 +60,16 @@ jobs:
 
             if ! echo "$runs" | jq -e '.runs != null and (.runs | length > 0)' > /dev/null; then
               echo "🆕 Aucun run trouvé pour l'expérience $exp. Création d’un run test..."
-              python <<EOF
+
+              echo "
 import mlflow
-mlflow.set_experiment(experiment_id="$exp")
+mlflow.set_experiment(experiment_id='$exp')
 with mlflow.start_run():
-    mlflow.log_param("auto_created", True)
-    mlflow.log_metric("test_metric", 0.99)
-EOF
+    mlflow.log_param('auto_created', True)
+    mlflow.log_metric('test_metric', 0.99)
+              " > inject_run.py
+
+              python inject_run.py
             else
               echo "✅ Des runs existent déjà pour l'expérience $exp."
             fi
