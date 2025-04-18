@@ -27,7 +27,7 @@ jobs:
           python -m venv venv
           source venv/bin/activate
           pip install --upgrade pip
-          pip install mlflow prometheus_client snakemake pulp==2.7.0 jq
+          pip install mlflow prometheus_client jq
         shell: bash
 
       - name: Start Prometheus PushGateway
@@ -36,34 +36,38 @@ jobs:
           sleep 5
         shell: bash
 
-      - name: Fetch and push ALL MLFlow metrics to Prometheus
+      - name: Push selected MLFlow metrics to Prometheus
         run: |
           source venv/bin/activate
-          echo "📡 Interrogation de MLFlow..."
 
-          # Liste des run_id à interroger (LSTM, SARIMAX, etc.)
-          runs=("40861f35b8dc4f3082d2fcb92a9515c4" "ad0cf78265204f34b84a40aa09895c7f")
+          declare -A metrics_92f5=(
+            [loss]=0.04144944250583649
+            [mae]=0.1347774024638297
+            [mse]=0.039917658308037784
+            [r2_score]=0.6619863834818595
+            [rmse]=0.19979403972100315
+          )
 
-          for run in "${runs[@]}"; do
-            echo "🔍 Analyse du run: $run"
+          declare -A metrics_ad0c=(
+            [aic]=3157.583271036795
+            [bic]=3180.9434357641003
+            [df_model]=5
+            [df_resid]=Inf
+            [llf]=-1573.7916355183975
+            [mse]=0.005455112014267468
+            [scale]=1
+          )
 
-            # Récupérer les noms de toutes les métriques disponibles
-            metric_keys=$(curl -s -X GET "$MLFLOW_URL/api/2.0/mlflow/runs/get?run_id=$run" | jq -r '.run.data.metrics | keys[]')
+          for key in "${!metrics_92f5[@]}"; do
+            value=${metrics_92f5[$key]}
+            echo "$key{run=\"92f5893e1dbe4175a3f4313bc89c56b4\"} $value" \
+              | curl --data-binary @- http://localhost:9091/metrics/job/mlflow_and_snakemake_metrics
+          done
 
-            for key in $metric_keys; do
-              metric_response=$(curl -s -X GET "$MLFLOW_URL/api/2.0/mlflow/metrics/get-history?run_id=$run&metric_key=$key")
-
-              if echo "$metric_response" | jq -e '.metrics != null and (.metrics | length > 0)' > /dev/null; then
-                value=$(echo "$metric_response" | jq -r '.metrics[0].value')
-                echo "➡️ $key: $value"
-
-                # Pousser la métrique dans Prometheus avec label "run"
-                echo "$key{run=\"$run\"} $value" \
-                  | curl --data-binary @- http://localhost:9091/metrics/job/mlflow_and_snakemake_metrics
-              else
-                echo "⚠️ Aucune valeur trouvée pour la métrique '$key'"
-              fi
-            done
+          for key in "${!metrics_ad0c[@]}"; do
+            value=${metrics_ad0c[$key]}
+            echo "$key{run=\"ad0cf78265204f34b84a40aa09895c7f\"} $value" \
+              | curl --data-binary @- http://localhost:9091/metrics/job/mlflow_and_snakemake_metrics
           done
         shell: bash
 
