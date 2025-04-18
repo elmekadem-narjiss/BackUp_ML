@@ -36,17 +36,18 @@ jobs:
           sleep 5
         shell: bash
 
-      - name: Fetch and push all MLFlow metrics to Prometheus
+      - name: Fetch and push ALL MLFlow metrics to Prometheus
         run: |
           source venv/bin/activate
           echo "📡 Interrogation de MLFlow..."
 
+          # Liste des run_id à interroger (LSTM, SARIMAX, etc.)
           runs=("40861f35b8dc4f3082d2fcb92a9515c4" "ad0cf78265204f34b84a40aa09895c7f")
 
           for run in "${runs[@]}"; do
             echo "🔍 Analyse du run: $run"
 
-            # Récupération de toutes les métriques disponibles pour ce run
+            # Récupérer les noms de toutes les métriques disponibles
             metric_keys=$(curl -s -X GET "$MLFLOW_URL/api/2.0/mlflow/runs/get?run_id=$run" | jq -r '.run.data.metrics | keys[]')
 
             for key in $metric_keys; do
@@ -56,11 +57,11 @@ jobs:
                 value=$(echo "$metric_response" | jq -r '.metrics[0].value')
                 echo "➡️ $key: $value"
 
-                # Push vers PushGateway
+                # Pousser la métrique dans Prometheus avec label "run"
                 echo "$key{run=\"$run\"} $value" \
                   | curl --data-binary @- http://localhost:9091/metrics/job/mlflow_and_snakemake_metrics
               else
-                echo "⚠️ Aucune métrique trouvée pour $key"
+                echo "⚠️ Aucune valeur trouvée pour la métrique '$key'"
               fi
             done
           done
@@ -75,11 +76,7 @@ jobs:
       - name: Check metrics in PushGateway
         run: |
           echo "🔍 Vérification des métriques dans PushGateway..."
-          if curl -s http://127.0.0.1:9091/metrics | grep -q 'mlflow_and_snakemake_metrics'; then
-            echo "✅ Les métriques sont présentes dans PushGateway."
-          else
-            echo "❌ Aucune métrique trouvée dans PushGateway."
-          fi
+          curl -s http://127.0.0.1:9091/metrics | grep -E 'scale|loss|mae|mse|aic|bic|llf|r2_score|rmse|df_model|df_resid|success' || echo "⚠️ Pas de métriques visibles"
         shell: bash
 
       - name: Complete Monitoring
