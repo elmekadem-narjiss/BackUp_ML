@@ -52,9 +52,9 @@ jobs:
             if echo "$metric_response" | jq -e '.metrics != null and (.metrics | length > 0)' > /dev/null; then
               scale_value=$(echo "$metric_response" | jq -r '.metrics[0].value')
               echo "Valeur de la métrique 'scale' pour le run $run : $scale_value"
-              # Changer le nom de la métrique ici
-              echo "MLFlow_and_Snakemake_Workflow{run=\"$run\"} $scale_value" \
-                | curl --data-binary @- http://localhost:9091/metrics/job/mlflow_metrics
+              # Changer le nom du job ici
+              echo "scale{run=\"$run\"} $scale_value" \
+                | curl --data-binary @- http://localhost:9091/metrics/job/mlflow_and_snakemake_metrics
             else
               echo "⚠️ Aucune métrique 'scale' trouvée pour le run $run."
             fi
@@ -63,16 +63,16 @@ jobs:
 
       - name: Push global success metric to Prometheus
         run: |
-          echo "success 1" | curl --data-binary @- http://127.0.0.1:9091/metrics/job/mlflow_metrics
+          echo "success 1" | curl --data-binary @- http://127.0.0.1:9091/metrics/job/mlflow_and_snakemake_metrics
         shell: bash
 
       - name: Check metrics in PushGateway
         run: |
           echo "Vérification des métriques dans PushGateway..."
-          if curl -s http://127.0.0.1:9091/metrics | grep -q 'MLFlow_and_Snakemake_Workflow'; then
+          if curl -s http://127.0.0.1:9091/metrics | grep -q 'mlflow_and_snakemake_metrics'; then
             echo "✅ Les métriques sont présentes dans PushGateway."
           else
-            echo "❌ Aucune métrique 'MLFlow_and_Snakemake_Workflow' trouvée dans PushGateway."
+            echo "❌ Aucune métrique trouvée dans PushGateway."
           fi
         shell: bash
 
