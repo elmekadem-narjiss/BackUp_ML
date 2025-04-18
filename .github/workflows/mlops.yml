@@ -36,39 +36,45 @@ jobs:
           sleep 5
         shell: bash
 
-      - name: Fetch and push MLFlow metrics to Prometheus
+      - name: Fetch and push all MLFlow metrics to Prometheus
         run: |
           source venv/bin/activate
           echo "📡 Interrogation de MLFlow..."
-          
-          # Fetch the specific run IDs
+
           runs=("40861f35b8dc4f3082d2fcb92a9515c4" "ad0cf78265204f34b84a40aa09895c7f")
+
           for run in "${runs[@]}"; do
             echo "🔍 Analyse du run: $run"
-            # Fetch the metrics for the specific run using get-history API
-            metric_response=$(curl -s -X GET "$MLFLOW_URL/api/2.0/mlflow/metrics/get-history?run_id=$run&metric_key=scale")
-            
-            # Check if the response contains the correct metric data
-            if echo "$metric_response" | jq -e '.metrics != null and (.metrics | length > 0)' > /dev/null; then
-              scale_value=$(echo "$metric_response" | jq -r '.metrics[0].value')
-              echo "Valeur de la métrique 'scale' pour le run $run : $scale_value"
-              # Changer le nom du job ici
-              echo "scale{run=\"$run\"} $scale_value" \
-                | curl --data-binary @- http://localhost:9091/metrics/job/mlflow_and_snakemake_metrics
-            else
-              echo "⚠️ Aucune métrique 'scale' trouvée pour le run $run."
-            fi
+
+            # Récupération de toutes les métriques disponibles pour ce run
+            metric_keys=$(curl -s -X GET "$MLFLOW_URL/api/2.0/mlflow/runs/get?run_id=$run" | jq -r '.run.data.metrics | keys[]')
+
+            for key in $metric_keys; do
+              metric_response=$(curl -s -X GET "$MLFLOW_URL/api/2.0/mlflow/metrics/get-history?run_id=$run&metric_key=$key")
+
+              if echo "$metric_response" | jq -e '.metrics != null and (.metrics | length > 0)' > /dev/null; then
+                value=$(echo "$metric_response" | jq -r '.metrics[0].value')
+                echo "➡️ $key: $value"
+
+                # Push vers PushGateway
+                echo "$key{run=\"$run\"} $value" \
+                  | curl --data-binary @- http://localhost:9091/metrics/job/mlflow_and_snakemake_metrics
+              else
+                echo "⚠️ Aucune métrique trouvée pour $key"
+              fi
+            done
           done
         shell: bash
 
       - name: Push global success metric to Prometheus
         run: |
-          echo "success 1" | curl --data-binary @- http://127.0.0.1:9091/metrics/job/mlflow_and_snakemake_metrics
+          echo "success 1" \
+            | curl --data-binary @- http://127.0.0.1:9091/metrics/job/mlflow_and_snakemake_metrics
         shell: bash
 
       - name: Check metrics in PushGateway
         run: |
-          echo "Vérification des métriques dans PushGateway..."
+          echo "🔍 Vérification des métriques dans PushGateway..."
           if curl -s http://127.0.0.1:9091/metrics | grep -q 'mlflow_and_snakemake_metrics'; then
             echo "✅ Les métriques sont présentes dans PushGateway."
           else
