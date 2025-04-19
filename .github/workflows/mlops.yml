@@ -1,3 +1,5 @@
+name: MLFlow and Snakemake Workflow
+
 on:
   push:
     branches: [main]
@@ -29,17 +31,21 @@ jobs:
           pip install mlflow prometheus_client jq snakemake
         shell: bash
 
-      - name: Run Snakemake (without file interaction)
+      - name: Define and run Snakemake workflow
         run: |
           source venv/bin/activate
-          # Créer un fichier de règles Snakemake simple
-          echo "rule preprocess:
-  output: 'data/processed.csv'
-  shell:
-    echo 'Starting data preprocessing...' && echo 'Processed data' > data/processed.csv" > Snakefile
+          echo "
+          rule all:
+              input:
+                  'output/results.txt'
 
-          # Exécuter Snakemake sans interaction avec de vrais fichiers externes
-          snakemake --cores 1
+          rule process_data:
+              output:
+                  'output/results.txt'
+              shell:
+                  'echo \"Data processed at $(date)\" > {output}'
+          " > Snakefile
+          snakemake -s Snakefile --cores 1
         shell: bash
 
       - name: Push selected MLFlow metrics to Prometheus
