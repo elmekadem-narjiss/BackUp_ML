@@ -28,7 +28,8 @@ jobs:
           python -m venv venv
           source venv/bin/activate
           pip install --upgrade pip
-          pip install mlflow prometheus_client jq snakemake
+          pip install mlflow prometheus_client jq snakemake pulp --upgrade  # Mise à jour de pulp
+          pip install pulp[cbc]  # Installation du solver CBC
         shell: bash
 
       - name: Define and run Snakemake workflow
