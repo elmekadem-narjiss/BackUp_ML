@@ -28,153 +28,70 @@ jobs:
           python -m venv venv
           source venv/bin/activate
           pip install --upgrade pip
-          pip install mlflow prometheus_client jq
-          pip uninstall -y pulp
-          pip install pulp==2.5.1
-          pip install snakemake
+          pip install mlflow prometheus_client jq snakemake
         shell: bash
 
-      - name: Create raw data for processing
+      - name: Preprocess Data (Inline with Snakemake)
         run: |
-          # Créer un fichier raw_data.csv avec des données fictives
-          mkdir -p data
-          echo "id,name,value" > data/raw_data.csv
-          echo "1,Data1,10" >> data/raw_data.csv
-          echo "2,Data2,20" >> data/raw_data.csv
+          # Utilisation de Snakemake pour gérer le prétraitement des données
+          echo "rule preprocess:
+              input:
+                  'data/raw_data.csv'
+              output:
+                  'data/processed.csv'
+              shell:
+                  'cat {input} | awk \"{print \$1 * 2}\" > {output}'
+          " > Snakefile
+          snakemake -s Snakefile --cores 1
         shell: bash
 
-      - name: Create preprocess.py script
+      - name: Train Model (Inline with Snakemake)
         run: |
-          mkdir -p scripts
-          echo "import pandas as pd
-import sys
-
-def preprocess(input_file, output_file):
-    # Charger les données
-    df = pd.read_csv(input_file)
-    
-    # Exemple de prétraitement : multiplier les valeurs par 2
-    df['value'] = df['value'] * 2
-    
-    # Sauvegarder le fichier prétraité
-    df.to_csv(output_file, index=False)
-    
-if __name__ == '__main__':
-    preprocess(sys.argv[1], sys.argv[2])" > scripts/preprocess.py
+          # Utilisation de Snakemake pour entraîner un modèle
+          echo "rule train:
+              input:
+                  'data/processed.csv'
+              output:
+                  'results/model.pkl'
+              shell:
+                  'python -c \"import pandas as pd; from sklearn.linear_model import LinearRegression; df = pd.read_csv('{input}'); model = LinearRegression(); model.fit(df[['value']], df['value']); import pickle; pickle.dump(model, open('{output}', 'wb'))\"'
+          " >> Snakefile
+          snakemake -s Snakefile --cores 1
         shell: bash
 
-      - name: Create train.py script
+      - name: Evaluate Model (Inline with Snakemake)
         run: |
-          echo "import pandas as pd
-import pickle
-from sklearn.linear_model import LinearRegression
-import sys
-
-def train(input_file, output_file):
-    # Charger les données
-    df = pd.read_csv(input_file)
-    
-    # Exemple d'entraînement : régression linéaire
-    X = df[['value']]  # Variables explicatives
-    y = df['value']    # Variable cible (pour simplifier)
-    
-    model = LinearRegression()
-    model.fit(X, y)
-    
-    # Sauvegarder le modèle
-    with open(output_file, 'wb') as f:
-        pickle.dump(model, f)
-
-if __name__ == '__main__':
-    train(sys.argv[1], sys.argv[2])" > scripts/train.py
-        shell: bash
-
-      - name: Create evaluate.py script
-        run: |
-          echo "import pickle
-import pandas as pd
-import sys
-from sklearn.metrics import mean_squared_error
-
-def evaluate(input_file, model_file, output_file):
-    # Charger les données
-    df = pd.read_csv(input_file)
-    
-    # Charger le modèle
-    with open(model_file, 'rb') as f:
-        model = pickle.load(f)
-    
-    # Prédictions
-    X = df[['value']]
-    y_pred = model.predict(X)
-    
-    # Calcul de l'erreur quadratique moyenne
-    mse = mean_squared_error(df['value'], y_pred)
-    
-    # Sauvegarder les métriques
-    with open(output_file, 'w') as f:
-        f.write(f'Mean Squared Error: {mse}')
-
-if __name__ == '__main__':
-    evaluate(sys.argv[1], sys.argv[2], sys.argv[3])" > scripts/evaluate.py
-        shell: bash
-
-      - name: Create Snakefile dynamically
-        run: |
-          # Créer un Snakefile dans le répertoire de travail
-          echo "rule all:
-            input:
-                'results/metrics.txt'
-
-          rule preprocess:
-            input:
-                'data/raw_data.csv'
-            output:
-                'data/processed.csv'
-            shell:
-                'python scripts/preprocess.py {input} {output}'
-
-          rule train_model:
-            input:
-                'data/processed.csv'
-            output:
-                'results/model.pkl'
-            shell:
-                'python scripts/train.py {input} {output}'
-
-          rule evaluate:
-            input:
-                'results/model.pkl'
-            output:
-                'results/metrics.txt'
-            shell:
-                'python scripts/evaluate.py {input} results/model.pkl {output}'" > Snakefile
-        shell: bash
-
-      - name: Run Snakemake pipeline
-        run: |
-          source venv/bin/activate
-          snakemake --cores 1
+          # Utilisation de Snakemake pour évaluer le modèle
+          echo "rule evaluate:
+              input:
+                  'data/processed.csv',
+                  'results/model.pkl'
+              output:
+                  'results/metrics.txt'
+              shell:
+                  'python -c \"import pickle; from sklearn.metrics import mean_squared_error; import pandas as pd; df = pd.read_csv('{input[0]}'); model = pickle.load(open('{input[1]}', 'rb')); predictions = model.predict(df[['value']]); mse = mean_squared_error(df['value'], predictions); with open('{output}', 'w') as f: f.write(f'MSE: {mse}')\"'
+          " >> Snakefile
+          snakemake -s Snakefile --cores 1
         shell: bash
 
       - name: Push selected MLFlow metrics to Prometheus
         run: |
           source venv/bin/activate
           declare -A metrics_92f5=( 
-            [loss]=0.04144944250583649 
-            [mae]=0.1347774024638297 
-            [mse]=0.039917658308037784 
-            [r2_score]=0.6619863834818595 
-            [rmse]=0.19979403972100315 
+            [loss]=0.04144944250583649
+            [mae]=0.1347774024638297
+            [mse]=0.039917658308037784
+            [r2_score]=0.6619863834818595
+            [rmse]=0.19979403972100315
           )
           declare -A metrics_ad0c=( 
-            [aic]=3157.583271036795 
-            [bic]=3180.9434357641003 
-            [df_model]=5 
-            [df_resid]=Inf 
-            [llf]=-1573.7916355183975 
-            [mse]=0.005455112014267468 
-            [scale]=1 
+            [aic]=3157.583271036795
+            [bic]=3180.9434357641003
+            [df_model]=5
+            [df_resid]=Inf
+            [llf]=-1573.7916355183975
+            [mse]=0.005455112014267468
+            [scale]=1
           )
           for key in "${!metrics_92f5[@]}"; do
             value=${metrics_92f5[$key]}
