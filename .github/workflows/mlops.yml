@@ -8,6 +8,7 @@ on:
 
 env:
   MLFLOW_URL: https://4af2-160-176-233-39.ngrok-free.app
+  PUSHGATEWAY_URL: https://e546-160-179-231-239.ngrok-free.app
 
 jobs:
   build:
@@ -30,16 +31,11 @@ jobs:
           pip install mlflow prometheus_client jq
         shell: bash
 
-      - name: Start Prometheus PushGateway
-        run: |
-          docker run -d -p 9091:9091 prom/pushgateway
-          sleep 5
-        shell: bash
+      # Pas besoin de lancer un PushGateway ici car il est déjà exposé sur ta machine locale via ngrok
 
       - name: Push selected MLFlow metrics to Prometheus
         run: |
           source venv/bin/activate
-
           declare -A metrics_92f5=(
             [loss]=0.04144944250583649
             [mae]=0.1347774024638297
@@ -47,7 +43,6 @@ jobs:
             [r2_score]=0.6619863834818595
             [rmse]=0.19979403972100315
           )
-
           declare -A metrics_ad0c=(
             [aic]=3157.583271036795
             [bic]=3180.9434357641003
@@ -57,30 +52,28 @@ jobs:
             [mse]=0.005455112014267468
             [scale]=1
           )
-
           for key in "${!metrics_92f5[@]}"; do
             value=${metrics_92f5[$key]}
             echo "$key{run=\"92f5893e1dbe4175a3f4313bc89c56b4\"} $value" \
-              | curl --data-binary @- http://localhost:9091/metrics/job/mlflow_and_snakemake_metrics
+              | curl --data-binary @- $PUSHGATEWAY_URL/metrics/job/mlflow_and_snakemake_metrics
           done
-
           for key in "${!metrics_ad0c[@]}"; do
             value=${metrics_ad0c[$key]}
             echo "$key{run=\"ad0cf78265204f34b84a40aa09895c7f\"} $value" \
-              | curl --data-binary @- http://localhost:9091/metrics/job/mlflow_and_snakemake_metrics
+              | curl --data-binary @- $PUSHGATEWAY_URL/metrics/job/mlflow_and_snakemake_metrics
           done
         shell: bash
 
       - name: Push global success metric to Prometheus
         run: |
           echo "success 1" \
-            | curl --data-binary @- http://127.0.0.1:9091/metrics/job/mlflow_and_snakemake_metrics
+            | curl --data-binary @- $PUSHGATEWAY_URL/metrics/job/mlflow_and_snakemake_metrics
         shell: bash
 
       - name: Check metrics in PushGateway
         run: |
           echo "🔍 Vérification des métriques dans PushGateway..."
-          curl -s http://127.0.0.1:9091/metrics | grep -E 'scale|loss|mae|mse|aic|bic|llf|r2_score|rmse|df_model|df_resid|success' || echo "⚠️ Pas de métriques visibles"
+          curl -s $PUSHGATEWAY_URL/metrics | grep -E 'scale|loss|mae|mse|aic|bic|llf|r2_score|rmse|df_model|df_resid|success' || echo "⚠️ Pas de métriques visibles"
         shell: bash
 
       - name: Complete Monitoring
