@@ -34,8 +34,94 @@ jobs:
           pip install snakemake
         shell: bash
 
+      - name: Create raw data for processing
+        run: |
+          # Créer un fichier raw_data.csv avec des données fictives
+          mkdir -p data
+          echo "id,name,value" > data/raw_data.csv
+          echo "1,Data1,10" >> data/raw_data.csv
+          echo "2,Data2,20" >> data/raw_data.csv
+        shell: bash
+
+      - name: Create preprocess.py script
+        run: |
+          mkdir -p scripts
+          echo "import pandas as pd
+import sys
+
+def preprocess(input_file, output_file):
+    # Charger les données
+    df = pd.read_csv(input_file)
+    
+    # Exemple de prétraitement : multiplier les valeurs par 2
+    df['value'] = df['value'] * 2
+    
+    # Sauvegarder le fichier prétraité
+    df.to_csv(output_file, index=False)
+    
+if __name__ == '__main__':
+    preprocess(sys.argv[1], sys.argv[2])" > scripts/preprocess.py
+        shell: bash
+
+      - name: Create train.py script
+        run: |
+          echo "import pandas as pd
+import pickle
+from sklearn.linear_model import LinearRegression
+import sys
+
+def train(input_file, output_file):
+    # Charger les données
+    df = pd.read_csv(input_file)
+    
+    # Exemple d'entraînement : régression linéaire
+    X = df[['value']]  # Variables explicatives
+    y = df['value']    # Variable cible (pour simplifier)
+    
+    model = LinearRegression()
+    model.fit(X, y)
+    
+    # Sauvegarder le modèle
+    with open(output_file, 'wb') as f:
+        pickle.dump(model, f)
+
+if __name__ == '__main__':
+    train(sys.argv[1], sys.argv[2])" > scripts/train.py
+        shell: bash
+
+      - name: Create evaluate.py script
+        run: |
+          echo "import pickle
+import pandas as pd
+import sys
+from sklearn.metrics import mean_squared_error
+
+def evaluate(input_file, model_file, output_file):
+    # Charger les données
+    df = pd.read_csv(input_file)
+    
+    # Charger le modèle
+    with open(model_file, 'rb') as f:
+        model = pickle.load(f)
+    
+    # Prédictions
+    X = df[['value']]
+    y_pred = model.predict(X)
+    
+    # Calcul de l'erreur quadratique moyenne
+    mse = mean_squared_error(df['value'], y_pred)
+    
+    # Sauvegarder les métriques
+    with open(output_file, 'w') as f:
+        f.write(f'Mean Squared Error: {mse}')
+
+if __name__ == '__main__':
+    evaluate(sys.argv[1], sys.argv[2], sys.argv[3])" > scripts/evaluate.py
+        shell: bash
+
       - name: Create Snakefile dynamically
         run: |
+          # Créer un Snakefile dans le répertoire de travail
           echo "rule all:
             input:
                 'results/metrics.txt'
@@ -62,7 +148,7 @@ jobs:
             output:
                 'results/metrics.txt'
             shell:
-                'python scripts/evaluate.py {input} > {output}'" > Snakefile
+                'python scripts/evaluate.py {input} results/model.pkl {output}'" > Snakefile
         shell: bash
 
       - name: Run Snakemake pipeline
