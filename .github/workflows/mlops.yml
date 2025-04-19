@@ -31,19 +31,18 @@ jobs:
           pip install mlflow prometheus_client jq snakemake
         shell: bash
 
-      # Étape Snakemake intégrée dans le pipeline
-      - name: Run Snakemake-like task without Snakefile
+      - name: Run Snakemake (without file interaction)
         run: |
           source venv/bin/activate
-          # Assure-toi que le répertoire "data" existe
-          mkdir -p data
-          # Exemple d'une tâche de prétraitement de données avec awk directement dans GitHub Actions
-          echo "Starting data preprocessing..."
-          awk '{print $1 * 2}' data/raw_data.csv > data/processed.csv
-          echo "Data preprocessing completed."
-        shell: bash
+          # Créer un fichier de règles Snakemake simple
+          echo "rule preprocess:
+  output: 'data/processed.csv'
+  shell:
+    echo 'Starting data preprocessing...' && echo 'Processed data' > data/processed.csv" > Snakefile
 
-      # Pas besoin de lancer un PushGateway ici car il est déjà exposé sur ta machine locale via ngrok
+          # Exécuter Snakemake sans interaction avec de vrais fichiers externes
+          snakemake --cores 1
+        shell: bash
 
       - name: Push selected MLFlow metrics to Prometheus
         run: |
