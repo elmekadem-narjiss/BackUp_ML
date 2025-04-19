@@ -28,29 +28,67 @@ jobs:
           python -m venv venv
           source venv/bin/activate
           pip install --upgrade pip
-          pip install mlflow prometheus_client jq
+          pip install mlflow prometheus_client jq snakemake
         shell: bash
 
       # Pas besoin de lancer un PushGateway ici car il est déjà exposé sur ta machine locale via ngrok
 
+      - name: Create Snakefile dynamically
+        run: |
+          echo "rule all:
+            input:
+                'results/metrics.txt'
+
+          rule preprocess:
+            input:
+                'data/raw_data.csv'
+            output:
+                'data/processed.csv'
+            shell:
+                'python scripts/preprocess.py {input} {output}'
+
+          rule train_model:
+            input:
+                'data/processed.csv'
+            output:
+                'results/model.pkl'
+            shell:
+                'python scripts/train.py {input} {output}'
+
+          rule evaluate:
+            input:
+                'results/model.pkl'
+            output:
+                'results/metrics.txt'
+            shell:
+                'python scripts/evaluate.py {input} > {output}'" > Snakefile
+        shell: bash
+
+      # Exécution du pipeline Snakemake
+      - name: Run Snakemake pipeline
+        run: |
+          source venv/bin/activate
+          snakemake --cores 1
+        shell: bash
+
       - name: Push selected MLFlow metrics to Prometheus
         run: |
           source venv/bin/activate
-          declare -A metrics_92f5=(
-            [loss]=0.04144944250583649
-            [mae]=0.1347774024638297
-            [mse]=0.039917658308037784
-            [r2_score]=0.6619863834818595
-            [rmse]=0.19979403972100315
+          declare -A metrics_92f5=( 
+            [loss]=0.04144944250583649 
+            [mae]=0.1347774024638297 
+            [mse]=0.039917658308037784 
+            [r2_score]=0.6619863834818595 
+            [rmse]=0.19979403972100315 
           )
-          declare -A metrics_ad0c=(
-            [aic]=3157.583271036795
-            [bic]=3180.9434357641003
-            [df_model]=5
-            [df_resid]=Inf
-            [llf]=-1573.7916355183975
-            [mse]=0.005455112014267468
-            [scale]=1
+          declare -A metrics_ad0c=( 
+            [aic]=3157.583271036795 
+            [bic]=3180.9434357641003 
+            [df_model]=5 
+            [df_resid]=Inf 
+            [llf]=-1573.7916355183975 
+            [mse]=0.005455112014267468 
+            [scale]=1 
           )
           for key in "${!metrics_92f5[@]}"; do
             value=${metrics_92f5[$key]}
