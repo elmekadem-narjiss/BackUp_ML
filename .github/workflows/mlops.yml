@@ -54,7 +54,7 @@ jobs:
               output:
                   'data/processed.csv'
               shell:
-                  'cat {input} | awk \"{{print \$1 * 2}}\" > {output}'
+                  'awk \"{{print \$1 * 2}}\" {input} > {output}'
           " > Snakefile
         shell: bash
 
