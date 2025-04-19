@@ -1,5 +1,3 @@
-name: MLFlow and Snakemake Workflow
-
 on:
   push:
     branches: [main]
