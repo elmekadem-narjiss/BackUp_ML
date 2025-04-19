@@ -28,7 +28,9 @@ jobs:
           python -m venv venv
           source venv/bin/activate
           pip install --upgrade pip
-          pip install mlflow prometheus_client jq snakemake
+          pip install mlflow prometheus_client jq
+          pip install pulp==2.3.1  # Installation d'une version spécifique de pulp
+          pip install snakemake
           which snakemake  # Vérifie que Snakemake est installé
         shell: bash
 
