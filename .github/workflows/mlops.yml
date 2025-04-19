@@ -29,24 +29,53 @@ jobs:
           source venv/bin/activate
           pip install --upgrade pip
           pip install mlflow prometheus_client jq
-          pip install pulp==2.3.1  # Installation d'une version spécifique de pulp
+          pip install pulp==2.3.1  # Installation d'une version spécifique de pulp pour résoudre l'erreur
           pip install snakemake
           which snakemake  # Vérifie que Snakemake est installé
         shell: bash
 
-      # Pas besoin de lancer un PushGateway ici car il est déjà exposé sur ta machine locale via ngrok
+      # Créer un fichier raw_data.csv pour Snakemake
+      - name: Create raw_data.csv file
+        run: |
+          mkdir -p data  # Créer le dossier data si nécessaire
+          echo "feature1,feature2" > data/raw_data.csv
+          echo "1.0,2.0" >> data/raw_data.csv
+          echo "3.0,4.0" >> data/raw_data.csv
+          echo "5.0,6.0" >> data/raw_data.csv
+        shell: bash
 
+      # Créer le fichier Snakefile pour le prétraitement
+      - name: Create Snakefile for preprocessing
+        run: |
+          source venv/bin/activate
+          echo "rule preprocess:
+              input:
+                  'data/raw_data.csv'
+              output:
+                  'data/processed.csv'
+              shell:
+                  'cat {input} | awk \"{print \$1 * 2}\" > {output}'
+          " > Snakefile
+        shell: bash
+
+      - name: Run Snakemake for preprocessing
+        run: |
+          source venv/bin/activate
+          snakemake -s Snakefile --cores 1
+        shell: bash
+
+      # Push selected MLFlow metrics to Prometheus
       - name: Push selected MLFlow metrics to Prometheus
         run: |
           source venv/bin/activate
-          declare -A metrics_92f5=(
+          declare -A metrics_92f5=( 
             [loss]=0.04144944250583649
             [mae]=0.1347774024638297
             [mse]=0.039917658308037784
             [r2_score]=0.6619863834818595
             [rmse]=0.19979403972100315
           )
-          declare -A metrics_ad0c=(
+          declare -A metrics_ad0c=( 
             [aic]=3157.583271036795
             [bic]=3180.9434357641003
             [df_model]=5
@@ -81,23 +110,4 @@ jobs:
 
       - name: Complete Monitoring
         run: echo "✅ Fin de l'exécution, vérification via Grafana et Prometheus"
-        shell: bash
-
-      - name: Create Snakefile for preprocessing
-        run: |
-          source venv/bin/activate
-          echo "rule preprocess:
-              input:
-                  'data/raw_data.csv'
-              output:
-                  'data/processed.csv'
-              shell:
-                  'cat {input} | awk \"{print \$1 * 2}\" > {output}'
-          " > Snakefile
-        shell: bash
-
-      - name: Run Snakemake for preprocessing
-        run: |
-          source venv/bin/activate
-          snakemake -s Snakefile --cores 1
         shell: bash
