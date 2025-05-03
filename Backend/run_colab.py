@@ -22,10 +22,10 @@ def run_colab_notebook(notebook_url, client_secrets, env_vars):
         pass
 
 if __name__ == "__main__":
-    notebook_url = "https://raw.githubusercontent.com/<ton-utilisateur>/<ton-repo>/main/ppo_pipeline.ipynb"
+    notebook_url = "https://raw.githubusercontent.com/elmekadem-narjiss/BackUp_ML/refs/heads/main/Backend/ppo_pipeline.ipynb"
     client_secrets = os.getenv("GOOGLE_DRIVE_CLIENT_SECRETS", "")
     env_vars = {
-        "MLFLOW_URL": os.getenv("MLFLOW_URL", "http://localhost:5000"),
-        "PUSHGATEWAY_URL": os.getenv("PUSHGATEWAY_URL", "http://localhost:9091")
+        "MLFLOW_URL": os.getenv("MLFLOW_URL", "https://e06b-41-248-47-247.ngrok-free.app/"),
+        "PUSHGATEWAY_URL": os.getenv("PUSHGATEWAY_URL", "https://a9ca-41-248-47-247.ngrok-free.app/")
     }
     run_colab_notebook(notebook_url, client_secrets, env_vars)
