@@ -1,6 +1,8 @@
 name: MLFlow and Snakemake Workflow
 
 on:
+  schedule:
+    - cron: '0 8 * * *'  # Exécuter tous les jours à 8h00 UTC
   push:
     branches: [main]
   pull_request:
@@ -28,31 +30,47 @@ jobs:
           python -m venv venv
           source venv/bin/activate
           pip install --upgrade pip
-          pip install mlflow prometheus_client jq snakemake pulp==2.4 pulp[cbc] stable-baselines3 gym pandas numpy matplotlib shimmy jupyter nbconvert
+          pip install mlflow prometheus_client jq snakemake pulp==2.4 pulp[cbc] stable-baselines3 gym pandas numpy matplotlib shimmy jupyter nbconvert papermill google-auth google-auth-oauthlib google-api-python-client ipykernel
         shell: bash
 
-      - name: Define and run Snakemake workflow
+      - name: Install Jupyter kernel
         run: |
           source venv/bin/activate
-          echo "
-          rule all:
-              input:
-                  'output/results.txt',
-                  'ppo_pipeline.ipynb'
+          python -m ipykernel install --user --name python3 --display-name "Python 3 (venv)"
+        shell: bash
 
-          rule process_data:
-              output:
-                  'output/results.txt'
-              shell:
-                  'echo \"Data processed at $(date)\" > {output}'
+      - name: Save Google Drive credentials
+        run: |
+          echo "${{ secrets.GOOGLE_DRIVE_CLIENT_SECRETS }}" > client_secrets.json
+        shell: bash
 
-          rule setup_colab_ppo:
-              output:
-                  'ppo_pipeline.ipynb'
-              shell:
-                  'wget https://raw.githubusercontent.com/elmekadem-narjiss/BackUp_ML/refs/heads/main/Backend/ppo_pipeline.ipynb -O {output}'
-          " > Snakefile
-          snakemake -s Snakefile --cores 1
+      - name: Save Google Drive token
+        run: |
+          echo "${{ secrets.GOOGLE_DRIVE_TOKEN }}" > token.json
+        shell: bash
+
+      - name: Download notebook and scripts
+        run: |
+          wget https://raw.githubusercontent.com/elmekadem-narjiss/BackUp_ML/refs/heads/main/Backend/ppo_pipeline.ipynb -O ppo_pipeline.ipynb
+          wget https://raw.githubusercontent.com/elmekadem-narjiss/BackUp_ML/refs/heads/main/Backend/train_ppo.py -O train_ppo.py
+          wget https://raw.githubusercontent.com/elmekadem-narjiss/BackUp_ML/refs/heads/main/Backend/evaluate_ppo.py -O evaluate_ppo.py
+        shell: bash
+
+      - name: Execute notebook
+        run: |
+          source venv/bin/activate
+          mkdir -p output  # Créer le dossier output s'il n'existe pas
+          python -m papermill ppo_pipeline.ipynb output/ppo_pipeline_executed.ipynb \
+            -p MLFLOW_URL $MLFLOW_URL \
+            -p PUSHGATEWAY_URL $PUSHGATEWAY_URL \
+            -p output_dir output \
+            --kernel python3
+        shell: bash
+
+      - name: Download PPO metrics from Google Drive
+        run: |
+          source venv/bin/activate
+          python -c "import os; from google.oauth2.credentials import Credentials; from googleapiclient.discovery import build; from googleapiclient.http import MediaIoBaseDownload; import io; SCOPES = ['https://www.googleapis.com/auth/drive']; TOKEN_FILE = 'token.json'; creds = Credentials.from_authorized_user_file(TOKEN_FILE, SCOPES); service = build('drive', 'v3', credentials=creds); def download_file(file_name, destination): results = service.files().list(q=f\"name='{file_name}' and 'root' in parents\", fields=\"files(id, name)\").execute(); files = results.get('files', []); if not files: print(f\"Fichier {file_name} non trouvé dans Google Drive.\"); return False; file_id = files[0]['id']; request = service.files().get_media(fileId=file_id); fh = io.FileIO(destination, 'wb'); downloader = MediaIoBaseDownload(fh, request); done = False; while done is False: status, done = downloader.next_chunk(); print(f\"Téléchargement {file_name}: {int(status.progress() * 100)}%\"); if not os.path.exists('output'): os.makedirs('output'); download_file('ppo_bess_model_metrics.json', 'output/ppo_bess_model_metrics.json'); download_file('evaluation_metrics.json', 'output/evaluation_metrics.json')"
         shell: bash
 
       - name: Push selected MLFlow metrics to Prometheus
@@ -85,16 +103,16 @@ jobs:
               | curl --data-binary @- $PUSHGATEWAY_URL/metrics/job/mlflow_and_snakemake_metrics
           done
 
-          # Vérifier les métriques PPO depuis Google Drive (si accessibles localement)
-          if [ -f ppo_bess_model_metrics.json ]; then
-            TRAIN_METRICS=$(cat ppo_bess_model_metrics.json | jq -r 'to_entries | .[] | "\\(.key){run=\\\"ppo_training\\\"} \\(.value)"')
+          # Pousser les métriques PPO
+          if [ -f output/ppo_bess_model_metrics.json ]; then
+            TRAIN_METRICS=$(cat output/ppo_bess_model_metrics.json | jq -r 'to_entries | .[] | "\\(.key){run=\\\"ppo_training\\\"} \\(.value)"')
             while IFS= read -r metric; do
               echo "$metric" | curl --data-binary @- $PUSHGATEWAY_URL/metrics/job/ppo_metrics
             done <<< "$TRAIN_METRICS"
           fi
 
-          if [ -f evaluation_metrics.json ]; then
-            EVAL_METRICS=$(cat evaluation_metrics.json | jq -r 'to_entries | .[] | "\\(.key){run=\\\"ppo_evaluation\\\"} \\(.value)"')
+          if [ -f output/evaluation_metrics.json ]; then
+            EVAL_METRICS=$(cat output/evaluation_metrics.json | jq -r 'to_entries | .[] | "\\(.key){run=\\\"ppo_evaluation\\\"} \\(.value)"')
             while IFS= read -r metric; do
               echo "$metric" | curl --data-binary @- $PUSHGATEWAY_URL/metrics/job/ppo_metrics
             done <<< "$EVAL_METRICS"
