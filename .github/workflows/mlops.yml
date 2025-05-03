@@ -59,6 +59,7 @@ jobs:
       - name: Execute notebook
         run: |
           source venv/bin/activate
+          mkdir -p output  # Créer le dossier output s'il n'existe pas
           python -m papermill ppo_pipeline.ipynb output/ppo_pipeline_executed.ipynb \
             -p MLFLOW_URL $MLFLOW_URL \
             -p PUSHGATEWAY_URL $PUSHGATEWAY_URL \
@@ -111,7 +112,7 @@ jobs:
           fi
 
           if [ -f output/evaluation_metrics.json ]; then
-            EVAL_METRICS=$(cat evaluation_metrics.json | jq -r 'to_entries | .[] | "\\(.key){run=\\\"ppo_evaluation\\\"} \\(.value)"')
+            EVAL_METRICS=$(cat output/evaluation_metrics.json | jq -r 'to_entries | .[] | "\\(.key){run=\\\"ppo_evaluation\\\"} \\(.value)"')
             while IFS= read -r metric; do
               echo "$metric" | curl --data-binary @- $PUSHGATEWAY_URL/metrics/job/ppo_metrics
             done <<< "$EVAL_METRICS"
