@@ -1,128 +1,128 @@
 name: MLFlow and Snakemake Workflow
 
-   on:
-     push:
-       branches: [main]
-     pull_request:
-       branches: [main]
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
 
-   env:
-     MLFLOW_URL: https://e06b-41-248-47-247.ngrok-free.app/
-     PUSHGATEWAY_URL: https://a9ca-41-248-47-247.ngrok-free.app/
+env:
+  MLFLOW_URL: https://e06b-41-248-47-247.ngrok-free.app/
+  PUSHGATEWAY_URL: https://a9ca-41-248-47-247.ngrok-free.app/
 
-   jobs:
-     build:
-       runs-on: ubuntu-latest
+jobs:
+  build:
+    runs-on: ubuntu-latest
 
-       steps:
-         - name: Checkout code
-           uses: actions/checkout@v3
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v3
 
-         - name: Set up Python
-           uses: actions/setup-python@v4
-           with:
-             python-version: '3.9'
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.9'
 
-         - name: Set up virtual environment and install dependencies
-           run: |
-             python -m venv venv
-             source venv/bin/activate
-             pip install --upgrade pip
-             pip install mlflow prometheus_client jq snakemake pulp==2.4 pulp[cbc] stable-baselines3 gym pandas numpy matplotlib shimmy jupyter nbconvert
-           shell: bash
+      - name: Set up virtual environment and install dependencies
+        run: |
+          python -m venv venv
+          source venv/bin/activate
+          pip install --upgrade pip
+          pip install mlflow prometheus_client jq snakemake pulp==2.4 pulp[cbc] stable-baselines3 gym pandas numpy matplotlib shimmy jupyter nbconvert
+        shell: bash
 
-         - name: Define and run Snakemake workflow
-           run: |
-             source venv/bin/activate
-             echo "
-             rule all:
-                 input:
-                     'output/results.txt',
-                     '/content/drive/MyDrive/ppo_bess_model.zip',
-                     '/content/drive/MyDrive/evaluation_metrics.json'
+      - name: Define and run Snakemake workflow
+        run: |
+          source venv/bin/activate
+          echo "
+          rule all:
+              input:
+                  'output/results.txt',
+                  '/content/drive/MyDrive/ppo_bess_model.zip',
+                  '/content/drive/MyDrive/evaluation_metrics.json'
 
-             rule process_data:
-                 output:
-                     'output/results.txt'
-                 shell:
-                     'echo \"Data processed at $(date)\" > {output}'
+          rule process_data:
+              output:
+                  'output/results.txt'
+              shell:
+                  'echo \"Data processed at $(date)\" > {output}'
 
-             rule setup_colab_ppo:
-                 output:
-                     'ppo_pipeline.ipynb'
-                 shell:
-                     'wget https://raw.githubusercontent.com/elmekadem-narjiss/BackUp_ML/refs/heads/main/Backend/ppo_pipeline.ipynb -O {output}'
+          rule setup_colab_ppo:
+              output:
+                  'ppo_pipeline.ipynb'
+              shell:
+                  'wget https://raw.githubusercontent.com/elmekadem-narjiss/BackUp_ML/refs/heads/main/Backend/ppo_pipeline.ipynb -O {output}'
 
-             rule run_colab_ppo:
-                 input:
-                     'ppo_pipeline.ipynb'
-                 output:
-                     '/content/drive/MyDrive/ppo_bess_model.zip',
-                     '/content/drive/MyDrive/evaluation_metrics.json'
-                 shell:
-                     'python run_colab.py'
-             " > Snakefile
-             snakemake -s Snakefile --cores 1
-           shell: bash
+          rule run_colab_ppo:
+              input:
+                  'ppo_pipeline.ipynb'
+              output:
+                  '/content/drive/MyDrive/ppo_bess_model.zip',
+                  '/content/drive/MyDrive/evaluation_metrics.json'
+              shell:
+                  'python run_colab.py'
+          " > Snakefile
+          snakemake -s Snakefile --cores 1
+        shell: bash
 
-         - name: Push selected MLFlow metrics to Prometheus
-           run: |
-             source venv/bin/activate
-             declare -A metrics_92f5=(
-               [loss]=0.04144944250583649
-               [mae]=0.1347774024638297
-               [mse]=0.039917658308037784
-               [r2_score]=0.6619863834818595
-               [rmse]=0.19979403972100315
-             )
-             declare -A metrics_ad0c=(
-               [aic]=3157.583271036795
-               [bic]=3180.9434357641003
-               [df_model]=5
-               [df_resid]=Inf
-               [llf]=-1573.7916355183975
-               [mse]=0.005455112014267468
-               [scale]=1
-             )
-             for key in "${!metrics_92f5[@]}"; do
-               value=${metrics_92f5[$key]}
-               echo "$key{run=\"92f5893e1dbe4175a3f4313bc89c56b4\"} $value" \
-                 | curl --data-binary @- $PUSHGATEWAY_URL/metrics/job/mlflow_and_snakemake_metrics
-             done
-             for key in "${!metrics_ad0c[@]}"; do
-               value=${metrics_ad0c[$key]}
-               echo "$key{run=\"ad0cf78265204f34b84a40aa09895c7f\"} $value" \
-                 | curl --data-binary @- $PUSHGATEWAY_URL/metrics/job/mlflow_and_snakemake_metrics
-             done
+      - name: Push selected MLFlow metrics to Prometheus
+        run: |
+          source venv/bin/activate
+          declare -A metrics_92f5=(
+            [loss]=0.04144944250583649
+            [mae]=0.1347774024638297
+            [mse]=0.039917658308037784
+            [r2_score]=0.6619863834818595
+            [rmse]=0.19979403972100315
+          )
+          declare -A metrics_ad0c=(
+            [aic]=3157.583271036795
+            [bic]=3180.9434357641003
+            [df_model]=5
+            [df_resid]=Inf
+            [llf]=-1573.7916355183975
+            [mse]=0.005455112014267468
+            [scale]=1
+          )
+          for key in "${!metrics_92f5[@]}"; do
+            value=${metrics_92f5[$key]}
+            echo "$key{run=\"92f5893e1dbe4175a3f4313bc89c56b4\"} $value" \
+              | curl --data-binary @- $PUSHGATEWAY_URL/metrics/job/mlflow_and_snakemake_metrics
+          done
+          for key in "${!metrics_ad0c[@]}"; do
+            value=${metrics_ad0c[$key]}
+            echo "$key{run=\"ad0cf78265204f34b84a40aa09895c7f\"} $value" \
+              | curl --data-binary @- $PUSHGATEWAY_URL/metrics/job/mlflow_and_snakemake_metrics
+          done
 
-             # Ajouter les métriques PPO depuis Google Drive
-             if [ -f /content/drive/MyDrive/ppo_bess_model_metrics.json ]; then
-               TRAIN_METRICS=$(cat /content/drive/MyDrive/ppo_bess_model_metrics.json | jq -r 'to_entries | .[] | "\\(.key){run=\\\"ppo_training\\\"} \\(.value)"')
-               while IFS= read -r metric; do
-                 echo "$metric" | curl --data-binary @- $PUSHGATEWAY_URL/metrics/job/ppo_metrics
-               done <<< "$TRAIN_METRICS"
-             fi
+          # Ajouter les métriques PPO depuis Google Drive
+          if [ -f /content/drive/MyDrive/ppo_bess_model_metrics.json ]; then
+            TRAIN_METRICS=$(cat /content/drive/MyDrive/ppo_bess_model_metrics.json | jq -r 'to_entries | .[] | "\\(.key){run=\\\"ppo_training\\\"} \\(.value)"')
+            while IFS= read -r metric; do
+              echo "$metric" | curl --data-binary @- $PUSHGATEWAY_URL/metrics/job/ppo_metrics
+            done <<< "$TRAIN_METRICS"
+          fi
 
-             if [ -f /content/drive/MyDrive/evaluation_metrics.json ]; then
-               EVAL_METRICS=$(cat /content/drive/MyDrive/evaluation_metrics.json | jq -r 'to_entries | .[] | "\\(.key){run=\\\"ppo_evaluation\\\"} \\(.value)"')
-               while IFS= read -r metric; do
-                 echo "$metric" | curl --data-binary @- $PUSHGATEWAY_URL/metrics/job/ppo_metrics
-               done <<< "$EVAL_METRICS"
-             fi
-           shell: bash
+          if [ -f /content/drive/MyDrive/evaluation_metrics.json ]; then
+            EVAL_METRICS=$(cat /content/drive/MyDrive/evaluation_metrics.json | jq -r 'to_entries | .[] | "\\(.key){run=\\\"ppo_evaluation\\\"} \\(.value)"')
+            while IFS= read -r metric; do
+              echo "$metric" | curl --data-binary @- $PUSHGATEWAY_URL/metrics/job/ppo_metrics
+            done <<< "$EVAL_METRICS"
+          fi
+        shell: bash
 
-         - name: Push global success metric to Prometheus
-           run: |
-             echo "success 1" \
-               | curl --data-binary @- $PUSHGATEWAY_URL/metrics/job/mlflow_and_snakemake_metrics
-           shell: bash
+      - name: Push global success metric to Prometheus
+        run: |
+          echo "success 1" \
+            | curl --data-binary @- $PUSHGATEWAY_URL/metrics/job/mlflow_and_snakemake_metrics
+        shell: bash
 
-         - name: Check metrics in PushGateway
-           run: |
-             echo "🔍 Vérification des métriques dans PushGateway..."
-             curl -s $PUSHGATEWAY_URL/metrics | grep -E 'scale|loss|mae|mse|aic|bic|llf|r2_score|rmse|df_model|df_resid|success|avg_reward|avg_cycles|avg_accuracy|total_reward|cycles|accuracy' || echo "⚠️ Pas de métriques visibles"
-           shell: bash
+      - name: Check metrics in PushGateway
+        run: |
+          echo "🔍 Vérification des métriques dans PushGateway..."
+          curl -s $PUSHGATEWAY_URL/metrics | grep -E 'scale|loss|mae|mse|aic|bic|llf|r2_score|rmse|df_model|df_resid|success|avg_reward|avg_cycles|avg_accuracy|total_reward|cycles|accuracy' || echo "⚠️ Pas de métriques visibles"
+        shell: bash
 
-         - name: Complete Monitoring
-           run: echo "✅ Fin de l'exécution, vérification via Grafana et Prometheus"
-           shell: bash
+      - name: Complete Monitoring
+        run: echo "✅ Fin de l'exécution, vérification via Grafana et Prometheus"
+        shell: bash
