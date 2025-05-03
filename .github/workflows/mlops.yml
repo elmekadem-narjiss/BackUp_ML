@@ -10,7 +10,7 @@ on:
 
 env:
   MLFLOW_URL: https://e06b-41-248-47-247.ngrok-free.app/
-  PUSHGATEWAY_URL: https://a9ca-41-248-47-247.ngrok-free.app/
+  PUSHGATEWAY_URL: https://e546-160-179-231-239.ngrok-free.app/
 
 jobs:
   build:
@@ -54,23 +54,25 @@ jobs:
           wget https://raw.githubusercontent.com/elmekadem-narjiss/BackUp_ML/refs/heads/main/Backend/ppo_pipeline.ipynb -O ppo_pipeline.ipynb
           wget https://raw.githubusercontent.com/elmekadem-narjiss/BackUp_ML/refs/heads/main/Backend/train_ppo.py -O train_ppo.py
           wget https://raw.githubusercontent.com/elmekadem-narjiss/BackUp_ML/refs/heads/main/Backend/evaluate_ppo.py -O evaluate_ppo.py
+          wget https://raw.githubusercontent.com/elmekadem-narjiss/BackUp_ML/refs/heads/main/Backend/BESSBatteryEnv.py -O BESSBatteryEnv.py
+        shell: bash
+
+      - name: Download LSTM predictions from Google Drive
+        run: |
+          source venv/bin/activate
+          python -c "import os; from google.oauth2.credentials import Credentials; from googleapiclient.discovery import build; from googleapiclient.http import MediaIoBaseDownload; import io; SCOPES = ['https://www.googleapis.com/auth/drive']; TOKEN_FILE = 'token.json'; creds = Credentials.from_authorized_user_file(TOKEN_FILE, SCOPES); service = build('drive', 'v3', credentials=creds); def download_file(file_name, destination): results = service.files().list(q=f\"name='{file_name}' and 'root' in parents\", fields=\"files(id, name)\").execute(); files = results.get('files', []); if not files: print(f\"Fichier {file_name} non trouvé dans Google Drive.\"); return False; file_id = files[0]['id']; request = service.files().get_media(fileId=file_id); fh = io.FileIO(destination, 'wb'); downloader = MediaIoBaseDownload(fh, request); done = False; while done is False: status, done = downloader.next_chunk(); print(f\"Téléchargement {file_name}: {int(status.progress() * 100)}%\"); download_file('lstm_predictions_charger.csv', 'lstm_predictions_charger.csv')"
         shell: bash
 
       - name: Execute notebook
         run: |
           source venv/bin/activate
-          mkdir -p output  # Créer le dossier output s'il n'existe pas
+          mkdir -p output
           python -m papermill ppo_pipeline.ipynb output/ppo_pipeline_executed.ipynb \
             -p MLFLOW_URL $MLFLOW_URL \
             -p PUSHGATEWAY_URL $PUSHGATEWAY_URL \
             -p output_dir output \
+            -p file_path lstm_predictions_charger.csv \
             --kernel python3
-        shell: bash
-
-      - name: Download PPO metrics from Google Drive
-        run: |
-          source venv/bin/activate
-          python -c "import os; from google.oauth2.credentials import Credentials; from googleapiclient.discovery import build; from googleapiclient.http import MediaIoBaseDownload; import io; SCOPES = ['https://www.googleapis.com/auth/drive']; TOKEN_FILE = 'token.json'; creds = Credentials.from_authorized_user_file(TOKEN_FILE, SCOPES); service = build('drive', 'v3', credentials=creds); def download_file(file_name, destination): results = service.files().list(q=f\"name='{file_name}' and 'root' in parents\", fields=\"files(id, name)\").execute(); files = results.get('files', []); if not files: print(f\"Fichier {file_name} non trouvé dans Google Drive.\"); return False; file_id = files[0]['id']; request = service.files().get_media(fileId=file_id); fh = io.FileIO(destination, 'wb'); downloader = MediaIoBaseDownload(fh, request); done = False; while done is False: status, done = downloader.next_chunk(); print(f\"Téléchargement {file_name}: {int(status.progress() * 100)}%\"); if not os.path.exists('output'): os.makedirs('output'); download_file('ppo_bess_model_metrics.json', 'output/ppo_bess_model_metrics.json'); download_file('evaluation_metrics.json', 'output/evaluation_metrics.json')"
         shell: bash
 
       - name: Push selected MLFlow metrics to Prometheus
