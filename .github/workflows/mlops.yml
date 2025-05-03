@@ -38,8 +38,7 @@ jobs:
           rule all:
               input:
                   'output/results.txt',
-                  '/content/drive/MyDrive/ppo_bess_model.zip',
-                  '/content/drive/MyDrive/evaluation_metrics.json'
+                  'ppo_pipeline.ipynb'
 
           rule process_data:
               output:
@@ -52,15 +51,6 @@ jobs:
                   'ppo_pipeline.ipynb'
               shell:
                   'wget https://raw.githubusercontent.com/elmekadem-narjiss/BackUp_ML/refs/heads/main/Backend/ppo_pipeline.ipynb -O {output}'
-
-          rule run_colab_ppo:
-              input:
-                  'ppo_pipeline.ipynb'
-              output:
-                  '/content/drive/MyDrive/ppo_bess_model.zip',
-                  '/content/drive/MyDrive/evaluation_metrics.json'
-              shell:
-                  'python run_colab.py'
           " > Snakefile
           snakemake -s Snakefile --cores 1
         shell: bash
@@ -95,16 +85,16 @@ jobs:
               | curl --data-binary @- $PUSHGATEWAY_URL/metrics/job/mlflow_and_snakemake_metrics
           done
 
-          # Ajouter les métriques PPO depuis Google Drive
-          if [ -f /content/drive/MyDrive/ppo_bess_model_metrics.json ]; then
-            TRAIN_METRICS=$(cat /content/drive/MyDrive/ppo_bess_model_metrics.json | jq -r 'to_entries | .[] | "\\(.key){run=\\\"ppo_training\\\"} \\(.value)"')
+          # Vérifier les métriques PPO depuis Google Drive (si accessibles localement)
+          if [ -f ppo_bess_model_metrics.json ]; then
+            TRAIN_METRICS=$(cat ppo_bess_model_metrics.json | jq -r 'to_entries | .[] | "\\(.key){run=\\\"ppo_training\\\"} \\(.value)"')
             while IFS= read -r metric; do
               echo "$metric" | curl --data-binary @- $PUSHGATEWAY_URL/metrics/job/ppo_metrics
             done <<< "$TRAIN_METRICS"
           fi
 
-          if [ -f /content/drive/MyDrive/evaluation_metrics.json ]; then
-            EVAL_METRICS=$(cat /content/drive/MyDrive/evaluation_metrics.json | jq -r 'to_entries | .[] | "\\(.key){run=\\\"ppo_evaluation\\\"} \\(.value)"')
+          if [ -f evaluation_metrics.json ]; then
+            EVAL_METRICS=$(cat evaluation_metrics.json | jq -r 'to_entries | .[] | "\\(.key){run=\\\"ppo_evaluation\\\"} \\(.value)"')
             while IFS= read -r metric; do
               echo "$metric" | curl --data-binary @- $PUSHGATEWAY_URL/metrics/job/ppo_metrics
             done <<< "$EVAL_METRICS"
