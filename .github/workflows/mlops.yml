@@ -85,7 +85,7 @@ jobs:
           from googleapiclient.http import MediaIoBaseDownload
           import io
 
-print("Début de l'étape Download LSTM predictions from Google Drive")
+          print("Début de l'étape Download LSTM predictions from Google Drive")
 
 try:
     SCOPES = ['https://www.googleapis.com/auth/drive']
