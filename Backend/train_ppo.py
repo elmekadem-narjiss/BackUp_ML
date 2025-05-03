@@ -3,11 +3,13 @@ import matplotlib.pyplot as plt
 import mlflow
 import mlflow.sklearn
 import os
+import json
+import argparse
 from stable_baselines3 import PPO
 from stable_baselines3.common.vec_env import DummyVecEnv
 from BESSBatteryEnv import BESSBatteryEnv, fetch_lstm_predictions_from_drive
 
-def train_ppo_model(file_path="/content/drive/MyDrive/lstm_predictions_charger.csv", mlflow_url="http://localhost:5000"):
+def train_ppo_model(file_path, mlflow_url, output_dir, model_path):
     mlflow.set_tracking_uri(mlflow_url)
     mlflow.set_experiment("PPO_BESS_Training")
     
@@ -28,8 +30,8 @@ def train_ppo_model(file_path="/content/drive/MyDrive/lstm_predictions_charger.c
             clip_range=0.2,
         )
         model.learn(total_timesteps=3500000)
-        model.save("/content/drive/MyDrive/ppo_bess_model")
-        print("Entraînement terminé. Modèle sauvegardé.")
+        model.save(model_path)
+        print(f"Entraînement terminé. Modèle sauvegardé dans {model_path}")
 
         rewards, socs, actions_taken, cycle_counts, future_productions, accuracies = visualize_training(model, env)
         
@@ -40,18 +42,19 @@ def train_ppo_model(file_path="/content/drive/MyDrive/lstm_predictions_charger.c
         mlflow.log_metric("avg_cycles", np.mean(cycle_counts))
         mlflow.log_metric("avg_accuracy", np.mean(accuracies))
         
-        # Sauvegarder les graphiques dans Google Drive et les logger dans MLflow
-        plt.savefig("/content/drive/MyDrive/training_plots.png")
-        mlflow.log_artifact("/content/drive/MyDrive/training_plots.png")
+        # Sauvegarder les graphiques dans output_dir et les logger dans MLflow
+        plots_path = os.path.join(output_dir, "training_plots.png")
+        plt.savefig(plots_path)
+        mlflow.log_artifact(plots_path)
         
-        # Sauvegarder les métriques dans un fichier JSON pour Snakemake
+        # Sauvegarder les métriques dans un fichier JSON
         metrics = {
             "avg_reward": float(np.mean(rewards)),
             "avg_cycles": float(np.mean(cycle_counts)),
             "avg_accuracy": float(np.mean(accuracies))
         }
-        import json
-        with open("/content/drive/MyDrive/ppo_bess_model_metrics.json", "w") as f:
+        metrics_path = os.path.join(output_dir, "ppo_bess_model_metrics.json")
+        with open(metrics_path, "w") as f:
             json.dump(metrics, f)
         
         return metrics
@@ -135,4 +138,11 @@ def visualize_training(model, env, num_episodes=3):
     return rewards, socs, actions_taken, cycle_counts, future_productions, accuracies
 
 if __name__ == "__main__":
-    train_ppo_model()
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--file_path", type=str, required=True, help="Chemin vers le fichier de prédictions LSTM")
+    parser.add_argument("--mlflow_url", type=str, required=True, help="URL du serveur MLflow")
+    parser.add_argument("--output_dir", type=str, required=True, help="Dossier de sortie")
+    parser.add_argument("--model_path", type=str, required=True, help="Chemin où sauvegarder le modèle")
+    args = parser.parse_args()
+
+    train_ppo_model(args.file_path, args.mlflow_url, args.output_dir, args.model_path)

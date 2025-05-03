@@ -4,13 +4,15 @@ import pandas as pd
 import numpy as np
 import matplotlib.pyplot as plt
 import mlflow
+import json
+import argparse
 from stable_baselines3 import PPO
 from stable_baselines3.common.vec_env import DummyVecEnv
 from BESSBatteryEnv import BESSBatteryEnv, fetch_lstm_predictions_from_drive
 
 logging.basicConfig(level=logging.INFO)
 
-def load_and_evaluate_model(file_path="/content/drive/MyDrive/lstm_predictions_charger.csv", model_path="/content/drive/MyDrive/ppo_bess_model", mlflow_url="http://localhost:5000"):
+def load_and_evaluate_model(file_path, model_path, mlflow_url, output_dir):
     mlflow.set_tracking_uri(mlflow_url)
     mlflow.set_experiment("PPO_BESS_Evaluation")
     
@@ -89,24 +91,32 @@ def load_and_evaluate_model(file_path="/content/drive/MyDrive/lstm_predictions_c
         plt.legend()
 
         plt.tight_layout()
-        plt.savefig("/content/drive/MyDrive/evaluation_plots.png")
-        mlflow.log_artifact("/content/drive/MyDrive/evaluation_plots.png")
+        plots_path = os.path.join(output_dir, "evaluation_plots.png")
+        plt.savefig(plots_path)
+        mlflow.log_artifact(plots_path)
 
         mlflow.log_metric("total_reward", total_reward)
         mlflow.log_metric("cycles", cycle_count)
         mlflow.log_metric("accuracy", accuracy)
 
-        # Sauvegarder les métriques dans un fichier JSON pour Snakemake
+        # Sauvegarder les métriques dans un fichier JSON
         metrics = {
             "total_reward": float(total_reward),
             "cycles": float(cycle_count),
             "accuracy": float(accuracy)
         }
-        import json
-        with open("/content/drive/MyDrive/evaluation_metrics.json", "w") as f:
+        metrics_path = os.path.join(output_dir, "evaluation_metrics.json")
+        with open(metrics_path, "w") as f:
             json.dump(metrics, f)
 
         return metrics
 
 if __name__ == "__main__":
-    load_and_evaluate_model()
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--file_path", type=str, required=True, help="Chemin vers le fichier de prédictions LSTM")
+    parser.add_argument("--model_path", type=str, required=True, help="Chemin du modèle à charger")
+    parser.add_argument("--mlflow_url", type=str, required=True, help="URL du serveur MLflow")
+    parser.add_argument("--output_dir", type=str, required=True, help="Dossier de sortie")
+    args = parser.parse_args()
+
+    load_and_evaluate_model(args.file_path, args.model_path, args.mlflow_url, args.output_dir)
