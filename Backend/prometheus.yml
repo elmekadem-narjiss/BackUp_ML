@@ -1,0 +1,15 @@
+global:
+  scrape_interval: 15s
+
+scrape_configs:
+  - job_name: 'prometheus'
+    static_configs:
+      - targets: ['localhost:9090']  # Scrapper Prometheus lui-même
+
+  - job_name: 'mlflow_metrics'  
+    static_configs:
+      - targets: ['pushgateway:9091']  # Scrapper PushGateway pour les métriques MLFlow
+
+  - job_name: 'mlflow_and_snakemake_metrics'
+    static_configs:
+      - targets: ['pushgateway:9091']  # Scrapper PushGateway pour les métriques MLFlow et Snakemake
