@@ -92,13 +92,16 @@ jobs:
       - name: Check PushGateway accessibility
         run: |
           echo "Vérification de l'accessibilité de la PushGateway : $PUSHGATEWAY_URL"
+          echo "Envoi de la métrique de test vers $PUSHGATEWAY_URL/metrics/job/mlflow_and_snakemake_metrics"
           STATUS=$(echo "test_accessibility{job=\"mlflow_and_snakemake_metrics\"} 1" | curl -s -L -w "%{http_code}" --data-binary @- $PUSHGATEWAY_URL/metrics/job/mlflow_and_snakemake_metrics -o /dev/null)
           if [ "$STATUS" -eq 200 ]; then
             echo "PushGateway accessible, code HTTP : $STATUS"
           else
             echo "Erreur : PushGateway renvoie le code HTTP $STATUS"
             echo "Débogage : En-têtes de la requête POST :"
-            curl -s -I -X POST $PUSHGATEWAY_URL/metrics/job/mlflow_and_snakemake_metrics || echo "Échec de la requête HEAD"
+            curl -s -I -X POST $PUSHGATEWAY_URL/metrics/job/mlflow_and_snakemake_metrics || echo "Échec de la requête POST"
+            echo "Débogage : Tentative de GET pour vérifier l'endpoint metrics :"
+            curl -s -I $PUSHGATEWAY_URL/metrics || echo "Échec de la requête GET"
             exit 1
           fi
         shell: bash
