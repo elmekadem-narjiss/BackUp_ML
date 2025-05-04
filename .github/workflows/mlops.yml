@@ -77,7 +77,7 @@ jobs:
           echo "Vérification de l'environnement Python..."
           python --version
           pip list | grep google-api-python-client || { echo "Erreur : google-api-python-client non installé"; exit 1; }
-          python scripts/download_file.py || { echo "Échec de l'étape Download LSTM predictions from Google Drive"; exit 1; }
+          python download_file.py || { echo "Échec de l'étape Download LSTM predictions from Google Drive"; exit 1; }
         shell: bash
 
       - name: Execute notebook
