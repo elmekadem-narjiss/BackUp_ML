@@ -9,8 +9,8 @@ on:
     branches: [main]
 
 env:
-  MLFLOW_URL: https://54bd-41-248-47-247.ngrok-free.app/
-  PUSHGATEWAY_URL: https://a90f-41-248-47-247.ngrok-free.app/
+  MLFLOW_URL: https://e06b-41-248-47-247.ngrok-free.app/
+  PUSHGATEWAY_URL: https://e546-160-179-231-239.ngrok-free.app/
 
 jobs:
   build:
