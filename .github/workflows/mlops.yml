@@ -1,4 +1,3 @@
-```yaml
 name: MLFlow and Snakemake Workflow
 
 on:
