@@ -45,8 +45,10 @@ jobs:
           printf '%s' "${{ secrets.GOOGLE_DRIVE_CLIENT_SECRETS }}" > client_secrets.json
           if [ -s client_secrets.json ]; then
             echo "client_secrets.json créé avec succès."
-            echo "Contenu brut de client_secrets.json (anonymisé):"
-            head -c 20 client_secrets.json && echo "..."
+            echo "Contenu brut de client_secrets.json (anonymisé, premiers 50 caractères):"
+            head -c 50 client_secrets.json && echo "..."
+            echo "Contenu en hexadécimal (pour détecter les caractères non imprimables):"
+            xxd -l 50 client_secrets.json
             echo "Validation JSON:"
             cat client_secrets.json | jq . || { echo "Erreur : client_secrets.json n'est pas un JSON valide"; exit 1; }
           else
@@ -60,8 +62,10 @@ jobs:
           printf '%s' "${{ secrets.GOOGLE_DRIVE_TOKEN }}" > token.json
           if [ -s token.json ]; then
             echo "token.json créé avec succès."
-            echo "Contenu brut de token.json (anonymisé):"
-            head -c 20 token.json && echo "..."
+            echo "Contenu brut de token.json (anonymisé, premiers 50 caractères):"
+            head -c 50 token.json && echo "..."
+            echo "Contenu en hexadécimal (pour détecter les caractères non imprimables):"
+            xxd -l 50 token.json
             echo "Validation JSON:"
             cat token.json | jq . || { echo "Erreur : token.json n'est pas un JSON valide"; exit 1; }
           else
