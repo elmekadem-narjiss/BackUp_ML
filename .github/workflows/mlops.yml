@@ -53,10 +53,14 @@ jobs:
 
       - name: Save Google Drive token
         run: |
-          echo "${{ secrets.GOOGLE_DRIVE_TOKEN }}" > token.json
+          # Use printf to avoid newlines and handle special characters
+          printf '%s' "${{ secrets.GOOGLE_DRIVE_TOKEN }}" > token.json
+          # Strip outer quotes if present
+          sed -i 's/^"\(.*\)"$/\1/' token.json
           if [ -s token.json ]; then
             echo "token.json créé avec succès."
-            cat token.json
+            echo "Validation JSON:"
+            cat token.json | jq . || { echo "Erreur : token.json n'est pas un JSON valide"; exit 1; }
           else
             echo "Erreur : token.json est vide ou n'a pas pu être créé."
             exit 1
