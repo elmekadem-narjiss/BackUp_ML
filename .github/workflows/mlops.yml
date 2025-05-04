@@ -50,12 +50,7 @@ jobs:
 
       - name: Save Google Drive credentials
         run: |
-          echo "Contenu brut de GOOGLE_DRIVE_CLIENT_SECRETS (anonymisé, premiers 50 caractères):"
-          echo "${{ secrets.GOOGLE_DRIVE_CLIENT_SECRETS }}" | head -c 50 && echo "..."
-          echo "Contenu en hexadécimal de GOOGLE_DRIVE_CLIENT_SECRETS (premiers 50 octets):"
-          echo "${{ secrets.GOOGLE_DRIVE_CLIENT_SECRETS }}" | head -c 50 | xxd
-          echo "Tentative d'écriture de client_secrets.json avec jq..."
-          echo "${{ secrets.GOOGLE_DRIVE_CLIENT_SECRETS }}" | jq '.' > client_secrets.json || { echo "Erreur : GOOGLE_DRIVE_CLIENT_SECRETS n'est pas un JSON valide"; exit 1; }
+          echo '{"installed":{"client_id":"27688368522-s8f6r2og4ikhm9ngnnkgnvtkq01ahu4u.apps.googleusercontent.com","project_id":"colabautomation-458721","auth_uri":"https://accounts.google.com/o/oauth2/auth","token_uri":"https://oauth2.googleapis.com/token","auth_provider_x509_cert_url":"https://www.googleapis.com/oauth2/v1/certs","client_secret":"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","redirect_uris":["http://localhost"]}}' | jq '.' > client_secrets.json
           if [ -s client_secrets.json ]; then
             echo "client_secrets.json créé avec succès."
             echo "Contenu brut de client_secrets.json (anonymisé, premiers 50 caractères):"
