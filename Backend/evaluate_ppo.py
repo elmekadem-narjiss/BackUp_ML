@@ -10,11 +10,17 @@ def evaluate_ppo_model(model, file_path, output_dir, num_episodes=10):
     
     for _ in range(num_episodes):
         obs = env.reset()
+        # Vérifier que l'observation est numérique
+        if not np.all(np.isfinite(obs)):
+            raise ValueError(f"Observation non numérique ou invalide : {obs}")
         done = False
         episode_reward = 0
         while not done:
             action, _ = model.predict(obs)
             obs, reward, done, _ = env.step(action)
+            # Vérifier que l'observation est numérique après chaque étape
+            if not done and not np.all(np.isfinite(obs)):
+                raise ValueError(f"Observation non numérique ou invalide après étape : {obs}")
             episode_reward += reward
         total_rewards.append(episode_reward)
     
