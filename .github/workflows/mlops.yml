@@ -67,14 +67,14 @@ jobs:
 
       - name: Save Google Drive token
         run: |
-          printf '%s' "${{ secrets.GOOGLE_DRIVE_TOKEN }}" > token.json
+          echo '{"token": "ya29.a0AZYkNZigxH1DhQugv99ZweJfyZdWkklt1F9Ntn6JM5XFhf0q9Km2kecSEgHEgo1zNgKoRWJOUCkGjuGk96SHJKfTIEOMKEYWvzA1Ko3jTx1PR7i_SHwU8wgq-gZ29dwemUnKwgw2jxU0hp9U8jbFI9ZG6bAI9_3WHQ8VMt0xaCgYKAUQSARISFQHGX2Mi1HZSkTbbdf6FiXHFeKU_eA0175", "refresh_token": "1//09sy1DZcnY3jZCgYIARAAGAkSNwF-L9IrW4JaBOZSELGp4ClKWKCcDHRF0kD-Qpw2hOzkXtW-54-pNI29lU0rMPPI63IfdPtxYaE", "token_uri": "https://oauth2.googleapis.com/token", "client_id": "27688368522-s8f6r2og4ikhm9ngnnkgnvtkq01ahu4u.apps.googleusercontent.com", "client_secret": "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", "scopes": ["https://www.googleapis.com/auth/drive"], "universe_domain": "googleapis.com", "account": "", "expiry": "2025-05-03T23:38:04.625991Z"}' | jq '.' > token.json
           if [ -s token.json ]; then
             echo "token.json créé avec succès."
             echo "Contenu brut de token.json (anonymisé, premiers 50 caractères):"
             head -c 50 token.json && echo "..."
-            echo "Contenu en hexadécimal (pour détecter les caractères non imprimables):"
+            echo "Contenu en hexadécimal de token.json (premiers 50 octets):"
             xxd -l 50 token.json
-            echo "Validation JSON:"
+            echo "Validation JSON de token.json:"
             cat token.json | jq . || { echo "Erreur : token.json n'est pas un JSON valide"; exit 1; }
           else
             echo "Erreur : token.json est vide ou n'a pas pu être créé."
@@ -167,5 +167,6 @@ jobs:
         shell: bash
 
       - name: Complete Monitoring
-        run: echo "✅ Fin de l'exécution, vérification via Grafana et Prometheus"
+        run: |
+          echo "✅ Fin de l'exécution, vérification via Grafana et Prometheus"
         shell: bash
