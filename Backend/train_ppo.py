@@ -6,6 +6,11 @@ import os
 
 def train_ppo_model(file_path, output_dir, total_timesteps=10000):
     env = BESSBatteryEnv(file_path)
+    # Vérifier l'observation initiale
+    obs = env.reset()
+    if not np.all(np.isfinite(obs)):
+        raise ValueError(f"Observation initiale non numérique ou invalide : {obs}")
+    
     model = PPO("MlpPolicy", env, verbose=1)
     model.learn(total_timesteps=total_timesteps)
     
