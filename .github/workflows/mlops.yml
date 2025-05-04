@@ -42,7 +42,7 @@ jobs:
 
       - name: Save Google Drive credentials
         run: |
-          echo "${{ secrets.GOOGLE_DRIVE_CLIENT_SECRETS }}" > client_secrets.json
+          printf '%s' "${{ secrets.GOOGLE_DRIVE_CLIENT_SECRETS }}" > client_secrets.json
           if [ -s client_secrets.json ]; then
             echo "client_secrets.json créé avec succès."
             echo "Validation JSON:"
@@ -58,6 +58,8 @@ jobs:
           printf '%s' "${{ secrets.GOOGLE_DRIVE_TOKEN }}" > token.json
           if [ -s token.json ]; then
             echo "token.json créé avec succès."
+            echo "Validation JSON:"
+            cat token.json | jq . || { echo "Erreur : token.json n'est pas un JSON valide"; exit 1; }
           else
             echo "Erreur : token.json est vide ou n'a pas pu être créé."
             exit 1
