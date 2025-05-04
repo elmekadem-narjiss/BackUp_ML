@@ -97,7 +97,8 @@ jobs:
             echo "PushGateway accessible, code HTTP : $STATUS"
           else
             echo "Erreur : PushGateway renvoie le code HTTP $STATUS"
-            curl -s -I $PUSHGATEWAY_URL/metrics/job/mlflow_and_snakemake_metrics || echo "Échec de la requête HEAD"
+            echo "Débogage : En-têtes de la requête POST :"
+            curl -s -I -X POST $PUSHGATEWAY_URL/metrics/job/mlflow_and_snakemake_metrics || echo "Échec de la requête HEAD"
             exit 1
           fi
         shell: bash
