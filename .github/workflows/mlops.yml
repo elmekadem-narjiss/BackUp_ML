@@ -50,14 +50,19 @@ jobs:
 
       - name: Save Google Drive credentials
         run: |
-          printf '%s' "${{ secrets.GOOGLE_DRIVE_CLIENT_SECRETS }}" > client_secrets.json
+          echo "Contenu brut de GOOGLE_DRIVE_CLIENT_SECRETS (anonymisé, premiers 50 caractères):"
+          echo "${{ secrets.GOOGLE_DRIVE_CLIENT_SECRETS }}" | head -c 50 && echo "..."
+          echo "Contenu en hexadécimal de GOOGLE_DRIVE_CLIENT_SECRETS (premiers 50 octets):"
+          echo "${{ secrets.GOOGLE_DRIVE_CLIENT_SECRETS }}" | head -c 50 | xxd
+          echo "Tentative d'écriture de client_secrets.json avec jq..."
+          echo "${{ secrets.GOOGLE_DRIVE_CLIENT_SECRETS }}" | jq '.' > client_secrets.json || { echo "Erreur : GOOGLE_DRIVE_CLIENT_SECRETS n'est pas un JSON valide"; exit 1; }
           if [ -s client_secrets.json ]; then
             echo "client_secrets.json créé avec succès."
             echo "Contenu brut de client_secrets.json (anonymisé, premiers 50 caractères):"
             head -c 50 client_secrets.json && echo "..."
-            echo "Contenu en hexadécimal (pour détecter les caractères non imprimables):"
+            echo "Contenu en hexadécimal de client_secrets.json (premiers 50 octets):"
             xxd -l 50 client_secrets.json
-            echo "Validation JSON:"
+            echo "Validation JSON de client_secrets.json:"
             cat client_secrets.json | jq . || { echo "Erreur : client_secrets.json n'est pas un JSON valide"; exit 1; }
           else
             echo "Erreur : client_secrets.json est vide ou n'a pas pu être créé."
