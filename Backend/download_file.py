@@ -1,4 +1,3 @@
-```python
    import os
    import sys
    from google.oauth2.credentials import Credentials
@@ -56,4 +55,3 @@
    except Exception as e:
        print(f"Erreur lors du téléchargement : {str(e)}")
        sys.exit(1)
-   ```
