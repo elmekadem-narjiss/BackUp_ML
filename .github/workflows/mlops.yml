@@ -1,4 +1,3 @@
-```yaml
    name: MLFlow and Snakemake Workflow
 
    on:
@@ -162,4 +161,3 @@
          - name: Complete Monitoring
            run: echo "✅ Fin de l'exécution, vérification via Grafana et Prometheus"
            shell: bash
-   ```
