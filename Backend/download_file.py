@@ -1,6 +1,5 @@
 import os
 import sys
-import json
 from google.oauth2.credentials import Credentials
 from googleapiclient.discovery import build
 from googleapiclient.http import MediaIoBaseDownload
@@ -11,7 +10,6 @@ print("Début de l'étape Download LSTM predictions from Google Drive")
 try:
     SCOPES = ['https://www.googleapis.com/auth/drive']
     TOKEN_FILE = 'token.json'
-    CLIENT_SECRETS_FILE = 'client_secrets.json'
 
     print("Vérification de l'existence de token.json...")
     if not os.path.exists(TOKEN_FILE):
@@ -19,33 +17,9 @@ try:
         sys.exit(1)
     print("token.json trouvé.")
 
-    print("Vérification de l'existence de client_secrets.json...")
-    if not os.path.exists(CLIENT_SECRETS_FILE):
-        print("Erreur : client_secrets.json n'existe pas.")
-        sys.exit(1)
-    print("client_secrets.json trouvé.")
-
-    print("Chargement des client secrets...")
-    with open(CLIENT_SECRETS_FILE, 'r') as f:
-        client_secrets = json.load(f)
-    client_id = client_secrets['installed']['client_id']
-    client_secret = client_secrets['installed']['client_secret']
-    print("Client secrets chargés avec succès.")
-
-    print("Chargement du token...")
-    with open(TOKEN_FILE, 'r') as f:
-        access_token = f.read().strip()
-    print("Token chargé avec succès.")
-
-    print("Création des credentials...")
-    creds = Credentials(
-        token=access_token,
-        client_id=client_id,
-        client_secret=client_secret,
-        token_uri='https://oauth2.googleapis.com/token',
-        scopes=SCOPES
-    )
-    print("Credentials créées avec succès.")
+    print("Chargement des credentials depuis token.json...")
+    creds = Credentials.from_authorized_user_file(TOKEN_FILE, SCOPES)
+    print("Credentials chargées avec succès.")
 
     print("Construction du service Google Drive...")
     service = build('drive', 'v3', credentials=creds)
