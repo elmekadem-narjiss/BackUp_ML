@@ -155,9 +155,10 @@ jobs:
           if [ -f output/ppo_bess_model_metrics.json ]; then
             echo "Fichier ppo_bess_model_metrics.json trouvé. Contenu :"
             cat output/ppo_bess_model_metrics.json | jq . || echo "Erreur : ppo_bess_model_metrics.json n'est pas un JSON valide"
-            TRAIN_METRICS=$(cat output/ppo_bess_model_metrics.json | jq -r 'to_entries | .[] | "\\(.key){run=\\\"ppo_training\\\",job=\\\"ppo_metrics\\\"} \\(.value)"')
+            TRAIN_METRICS=$(cat output/ppo_bess_model_metrics.json | jq -r 'to_entries[] | .key + "{run=\"ppo_training\",job=\"ppo_metrics\"} " + (.value | tostring)')
             if [ -z "$TRAIN_METRICS" ]; then
               echo "Erreur : Aucune métrique trouvée dans ppo_bess_model_metrics.json"
+              exit 1
             else
               while IFS= read -r metric; do
                 echo "Envoi de la métrique PPO (entraînement) : $metric"
@@ -172,13 +173,15 @@ jobs:
             fi
           else
             echo "Erreur : ppo_bess_model_metrics.json non trouvé. Aucune métrique PPO d'entraînement envoyée."
+            exit 1
           fi
           if [ -f output/evaluation_metrics.json ]; then
             echo "Fichier evaluation_metrics.json trouvé. Contenu :"
             cat output/evaluation_metrics.json | jq . || echo "Erreur : evaluation_metrics.json n'est pas un JSON valide"
-            EVAL_METRICS=$(cat output/evaluation_metrics.json | jq -r 'to_entries | .[] | "\\(.key){run=\\\"ppo_evaluation\\\",job=\\\"ppo_metrics\\\"} \\(.value)"')
+            EVAL_METRICS=$(cat output/evaluation_metrics.json | jq -r 'to_entries[] | .key + "{run=\"ppo_evaluation\",job=\"ppo_metrics\"} " + (.value | tostring)')
             if [ -z "$EVAL_METRICS" ]; then
               echo "Erreur : Aucune métrique trouvée dans evaluation_metrics.json"
+              exit 1
             else
               while IFS= read -r metric; do
                 echo "Envoi de la métrique PPO (évaluation) : $metric"
@@ -193,6 +196,7 @@ jobs:
             fi
           else
             echo "Erreur : evaluation_metrics.json non trouvé. Aucune métrique PPO d'évaluation envoyée."
+            exit 1
           fi
         shell: bash
 
