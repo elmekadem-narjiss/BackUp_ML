@@ -1,91 +1,38 @@
 import pytest
-import pandas as pd
+import pytest_asyncio
+import respx
 from fastapi.testclient import TestClient
 from app.main import app
-from unittest.mock import patch, MagicMock
-import httpx
-import respx
+from app.services.enrich_data import enrich_data
 
-@pytest.fixture
-def client():
-    return TestClient(app)
-
-@pytest.fixture
-def mock_influxdb():
-    with patch("app.database.db_connection.connect_influxdb") as mock:
-        mock_client = MagicMock()
-        mock_client.query_api().query_data_frame.return_value = pd.DataFrame({
-            "timestamp": ["2023-01-01"],
-            "energyproduced": [100.0],
-            "temperature": [20.0],
-            "humidity": [50.0],
-            "month": [1],
-            "week_of_year": [1],
-            "hour": [12]
-        })
-        mock.return_value = mock_client
-        yield mock
-
-@pytest.fixture
-def mock_postgres():
-    with patch("app.database.db_connection.connect_postgresql") as mock:
-        mock_conn = MagicMock()
-        mock_cursor = MagicMock()
-        mock_conn.cursor.return_value = mock_cursor
-        mock.return_value = mock_conn
-        yield mock
-
-@pytest.fixture
-def mock_redis():
-    with patch("app.database.db_connection.connect_redis") as mock:
-        mock_redis = MagicMock()
-        mock.return_value = mock_redis
-        yield mock
-
-@pytest.fixture
-def mock_mqtt():
-    with patch("app.database.db_connection.connect_mqtt") as mock:
-        mock_mqtt = MagicMock()
-        mock.return_value = mock_mqtt
-        yield mock
+client = TestClient(app)
 
 @pytest_asyncio.fixture
-async def mock_http():
-    with respx.mock(base_url="http://localhost:8000") as respx_mock:
-        respx_mock.get("/load-data").respond(
-            status_code=200,
-            json={"nombre_de_lignes": 1, "data": {"timestamp": ["2023-01-01"], "energyproduced": [100.0]}}
-        )
-        respx_mock.post("/forecast").respond(
-            status_code=200,
-            json={"forecast": {"energyproduced": [110.0]}}
-        )
-        yield respx_mock
+async def mock_external_api():
+    with respx.mock(base_url="https://api.example.com") as mock:
+        mock.get("/data").mock(return_value=Response(200, json={"energyproduced": 100, "temperature": 25}))
+        yield mock
 
 @pytest.mark.asyncio
-async def test_load_data(client, mock_influxdb, mock_postgres, mock_redis, mock_mqtt, mock_http):
-    async with httpx.AsyncClient(app=app, base_url="http://localhost:8000") as async_client:
-        response = await async_client.get("/load-data")
-        assert response.status_code == 200
-        assert response.json()["nombre_de_lignes"] > 0
+async def test_load_data(mock_external_api):
+    response = client.get("/load-data")
+    assert response.status_code == 200
+    assert "energyproduced" in response.json()
 
 @pytest.mark.asyncio
-async def test_forecast_data(client, mock_influxdb, mock_postgres, mock_redis, mock_mqtt, mock_http):
-    async with httpx.AsyncClient(app=app, base_url="http://localhost:8000") as async_client:
-        response = await async_client.post("/forecast", json={"data": {"timestamp": "2023-01-01", "energyproduced": 100.0}})
-        assert response.status_code == 200
-        assert "forecast" in response.json()
+async def test_forecast_data(mock_external_api):
+    response = client.post("/forecast", json={"energyproduced": 100, "temperature": 25, "humidity": 60})
+    assert response.status_code == 200
+    assert "prediction" in response.json()
 
 @pytest.mark.asyncio
-async def test_forecast_no_data(client, mock_influxdb, mock_postgres, mock_redis, mock_mqtt, mock_http):
-    async with httpx.AsyncClient(app=app, base_url="http://localhost:8000") as async_client:
-        response = await async_client.post("/forecast", json={})
-        assert response.status_code == 200
-        assert response.json().get("forecast") is None
+async def test_forecast_no_data(mock_external_api):
+    response = client.post("/forecast", json={})
+    assert response.status_code == 400
+    assert "error" in response.json()
 
 @pytest.mark.asyncio
-async def test_forecast_invalid_data(client, mock_influxdb, mock_postgres, mock_redis, mock_mqtt, mock_http):
-    async with httpx.AsyncClient(app=app, base_url="http://localhost:8000") as async_client:
-        response = await async_client.post("/forecast", json={"data": {"invalid": "data"}})
-        assert response.status_code == 200
-        assert response.json().get("forecast") is None
+async def test_forecast_invalid_data(mock_external_api):
+    response = client.post("/forecast", json={"energyproduced": -100, "temperature": "invalid"})
+    assert response.status_code == 422
+    assert "detail" in response.json()
