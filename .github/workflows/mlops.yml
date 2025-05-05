@@ -1,229 +1,229 @@
 name: MLFlow and Snakemake Workflow
 
-   on:
-     schedule:
-       - cron: '0 8 * * *'  # Run daily at 8:00 UTC
-     push:
-       branches: [main]
-     pull_request:
-       branches: [main]
+on:
+  schedule:
+    - cron: '0 8 * * *'  # Run daily at 8:00 UTC
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
 
-   env:
-     MLFLOW_URL: https://8f8e-41-140-75-166.ngrok-free.app/
-     PUSHGATEWAY_URL: https://dabf-41-140-75-166.ngrok-free.app
+env:
+  MLFLOW_URL: https://8f8e-41-140-75-166.ngrok-free.app/
+  PUSHGATEWAY_URL: https://dabf-41-140-75-166.ngrok-free.app
 
-   jobs:
-     build:
-       runs-on: ubuntu-latest
-       steps:
-         - name: Checkout code
-           uses: actions/checkout@v3
-         - name: Set up Python
-           uses: actions/setup-python@v4
-           with:
-             python-version: '3.9'
-         - name: Set up virtual environment and install dependencies
-           run: |
-             python -m venv venv
-             source venv/bin/activate
-             pip install --upgrade pip
-             pip install mlflow prometheus_client jq snakemake pulp==2.4 pulp[cbc] stable-baselines3 gym pandas numpy matplotlib shimmy jupyter nbconvert papermill google-auth google-auth-oauthlib google-api-python-client ipykernel
-             pip list | grep ipykernel || { echo "Erreur : ipykernel non installé"; exit 1; }
-             pip list | grep google-api-python-client || { echo "Erreur : google-api-python-client non installé"; exit 1; }
-           shell: bash
-         - name: Install Jupyter kernel
-           run: |
-             source venv/bin/activate
-             python -m ipykernel install --user --name python3 --display-name "Python 3 (venv)"
-             echo "Kernel Jupyter installé avec succès."
-           shell: bash
-         - name: Save Google Drive token
-           run: |
-             echo '{"token": "ya29.a0AZYkNZigxH1DhQugv99ZweJfyZdWkklt1F9Ntn6JM5XFhf0q9Km2kecSEgHEgo1zNgKoRWJOUCkGjuGk96SHJKfTIEOMKEYWvzA1Ko3jTx1PR7i_SHwU8wgq-gZ29dwemUnKwgw2jxU0hp9U8jbFI9ZG6bAI9_3WHQ8VMt0xaCgYKAUQSARISFQHGX2Mi1HZSkTbbdf6FiXHFeKU_eA0175", "refresh_token": "1//09sy1DZcnY3jZCgYIARAAGAkSNwF-L9IrW4JaBOZSELGp4ClKWKCcDHRF0kD-Qpw2hOzkXtW-54-pNI29lU0rMPPI63IfdPtxYaE", "token_uri": "https://oauth2.googleapis.com/token", "client_id": "27688368522-s8f6r2og4ikhm9ngnnkgnvtkq01ahu4u.apps.googleusercontent.com", "client_secret": "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", "scopes": ["https://www.googleapis.com/auth/drive"], "universe_domain": "googleapis.com", "account": "", "expiry": "2025-05-03T23:38:04.625991Z"}' | jq '.' > token.json
-             if [ -s token.json ]; then
-               echo "token.json créé avec succès."
-               cat token.json | jq . || { echo "Erreur : token.json n'est pas un JSON valide"; exit 1; }
-             else
-               echo "Erreur : token.json est vide ou n'a pas pu être créé."
-               exit 1
-             fi
-           shell: bash
-         - name: Download notebook and scripts
-           run: |
-             wget https://raw.githubusercontent.com/elmekadem-narjiss/BackUp_ML/refs/heads/main/Backend/ppo_pipeline.ipynb -O ppo_pipeline.ipynb
-             wget https://raw.githubusercontent.com/elmekadem-narjiss/BackUp_ML/refs/heads/main/Backend/train_ppo.py -O train_ppo.py
-             wget https://raw.githubusercontent.com/elmekadem-narjiss/BackUp_ML/refs/heads/main/Backend/evaluate_ppo.py -O evaluate_ppo.py
-             wget https://raw.githubusercontent.com/elmekadem-narjiss/BackUp_ML/refs/heads/main/Backend/BESSBatteryEnv.py -O BESSBatteryEnv.py
-           shell: bash
-         - name: Download LSTM predictions from Google Drive
-           run: |
-             source venv/bin/activate
-             python Backend/download_file.py || { echo "Échec de l'étape Download LSTM predictions from Google Drive"; exit 1; }
-             if [ -f lstm_predictions_charger.csv ]; then
-               echo "Fichier lstm_predictions_charger.csv téléchargé avec succès."
-               ls -l lstm_predictions_charger.csv
-             else
-               echo "Erreur : lstm_predictions_charger.csv n'a pas été créé."
-               exit 1
-             fi
-           shell: bash
-         - name: Execute notebook
-           run: |
-             source venv/bin/activate
-             mkdir -p output
-             python -m papermill ppo_pipeline.ipynb output/ppo_pipeline_executed.ipynb \
-               -p MLFLOW_URL $MLFLOW_URL \
-               -p PUSHGATEWAY_URL $PUSHGATEWAY_URL \
-               -p output_dir output \
-               -p file_path lstm_predictions_charger.csv \
-               --kernel python3
-             echo "Vérification des fichiers JSON générés :"
-             ls -l output/*.json || echo "Aucun fichier JSON trouvé dans output/"
-           shell: bash
-         - name: Check PushGateway accessibility
-           run: |
-             echo "Vérification de l'accessibilité de la PushGateway : $PUSHGATEWAY_URL"
-             echo "Envoi de la métrique de test vers $PUSHGATEWAY_URL/metrics/job/mlflow_and_snakemake_metrics"
-             STATUS=$(echo "test_accessibility{job=\"mlflow_and_snakemake_metrics\"} 1" | curl -s -L -w "%{http_code}" --data-binary @- $PUSHGATEWAY_URL/metrics/job/mlflow_and_snakemake_metrics -o /dev/null)
-             if [ "$STATUS" -eq 200 ]; then
-               echo "PushGateway accessible, code HTTP : $STATUS"
-               echo "Vérification de la métrique test_accessibility dans PushGateway :"
-               curl -s -L $PUSHGATEWAY_URL/metrics | grep test_accessibility || echo "Métrique test_accessibility non trouvée"
-             else
-               echo "Erreur : PushGateway renvoie le code HTTP $STATUS"
-               echo "Débogage : En-têtes de la requête POST :"
-               curl -v -L -X POST $PUSHGATEWAY_URL/metrics/job/mlflow_and_snakemake_metrics 2>&1 || echo "Échec de la requête POST"
-               echo "Débogage : En-têtes de la requête GET pour l'endpoint metrics :"
-               curl -v -L $PUSHGATEWAY_URL/metrics 2>&1 || echo "Échec de la requête GET"
-               exit 1
-             fi
-           shell: bash
-         - name: Push selected MLFlow metrics to Prometheus
-           run: |
-             source venv/bin/activate
-             declare -A metrics_92f5=(
-               [loss]=0.04144944250583649
-               [mae]=0.1347774024638297
-               [mse]=0.039917658308037784
-               [r2_score]=0.6619863834818595
-               [rmse]=0.19979403972100315
-             )
-             declare -A metrics_ad0c=(
-               [aic]=3157.583271036795
-               [bic]=3180.9434357641003
-               [df_model]=5
-               [df_resid]=Inf
-               [llf]=-1573.7916355183975
-               [mse]=0.005455112014267468
-               [scale]=1
-             )
-             echo "Envoi des métriques metrics_92f5..."
-             for key in "${!metrics_92f5[@]}"; do
-               value=${metrics_92f5[$key]}
-               echo "Envoi : $key{run=\"92f5893e1dbe4175a3f4313bc89c56b4\",job=\"mlflow_and_snakemake_metrics\"} $value"
-               STATUS=$(echo "$key{run=\"92f5893e1dbe4175a3f4313bc89c56b4\",job=\"mlflow_and_snakemake_metrics\"} $value" | curl -s -L -w "%{http_code}" --data-binary @- $PUSHGATEWAY_URL/metrics/job/mlflow_and_snakemake_metrics -o /dev/null)
-               if [ "$STATUS" -eq 200 ]; then
-                 echo "Succès : Métrique $key envoyée, code HTTP $STATUS"
-               else
-                 echo "Erreur : Échec de l'envoi de la métrique $key, code HTTP $STATUS"
-                 exit 1
-               fi
-             done
-             echo "Envoi des métriques metrics_ad0c..."
-             for key in "${!metrics_ad0c[@]}"; do
-               value=${metrics_ad0c[$key]}
-               echo "Envoi : $key{run=\"ad0cf78265204f34b84a40aa09895c7f\",job=\"mlflow_and_snakemake_metrics\"} $value"
-               STATUS=$(echo "$key{run=\"ad0cf78265204f34b84a40aa09895c7f\",job=\"mlflow_and_snakemake_metrics\"} $value" | curl -s -L -w "%{http_code}" --data-binary @- $PUSHGATEWAY_URL/metrics/job/mlflow_and_snakemake_metrics -o /dev/null)
-               if [ "$STATUS" -eq 200 ]; then
-                 echo "Succès : Métrique $key envoyée, code HTTP $STATUS"
-               else
-                 echo "Erreur : Échec de l'envoi de la métrique $key, code HTTP $STATUS"
-                 exit 1
-               fi
-             done
-             echo "Vérification des fichiers PPO JSON :"
-             if [ -f output/ppo_bess_model_metrics.json ]; then
-               echo "Fichier ppo_bess_model_metrics.json trouvé. Contenu :"
-               cat output/ppo_bess_model_metrics.json | jq . || echo "Erreur : ppo_bess_model_metrics.json n'est pas un JSON valide"
-               TRAIN_METRICS=$(cat output/ppo_bess_model_metrics.json | jq -r 'to_entries[] | .key + "{run=\"ppo_training\",job=\"ppo_metrics\"} " + (.value | tostring)')
-               if [ -z "$TRAIN_METRICS" ]; then
-                 echo "Erreur : Aucune métrique trouvée dans ppo_bess_model_metrics.json"
-                 exit 1
-               else
-                 while IFS= read -r metric; do
-                   echo "Envoi de la métrique PPO (entraînement) : $metric"
-                   STATUS=$(echo "$metric" | curl -s -L -w "%{http_code}" --data-binary @- $PUSHGATEWAY_URL/metrics/job/ppo_metrics -o /dev/null)
-                   if [ "$STATUS" -eq 200 ]; then
-                     echo "Succès : Métrique PPO envoyée, code HTTP $STATUS"
-                   else
-                     echo "Erreur : Échec de l'envoi de la métrique PPO, code HTTP $STATUS"
-                     exit 1
-                   fi
-                 done <<< "$TRAIN_METRICS"
-               fi
-             else
-               echo "Erreur : ppo_bess_model_metrics.json non trouvé. Aucune métrique PPO d'entraînement envoyée."
-               exit 1
-             fi
-             if [ -f output/evaluation_metrics.json ]; then
-               echo "Fichier evaluation_metrics.json trouvé. Contenu :"
-               cat output/evaluation_metrics.json | jq . || echo "Erreur : evaluation_metrics.json n'est pas un JSON valide"
-               EVAL_METRICS=$(cat output/evaluation_metrics.json | jq -r 'to_entries[] | .key + "{run=\"ppo_evaluation\",job=\"ppo_metrics\"} " + (.value | tostring)')
-               if [ -z "$EVAL_METRICS" ]; then
-                 echo "Erreur : Aucune métrique trouvée dans evaluation_metrics.json"
-                 exit 1
-               else
-                 while IFS= read -r metric; do
-                   echo "Envoi de la métrique PPO (évaluation) : $metric"
-                   STATUS=$(echo "$metric" | curl -s -L -w "%{http_code}" --data-binary @- $PUSHGATEWAY_URL/metrics/job/ppo_metrics -o /dev/null)
-                   if [ "$STATUS" -eq 200 ]; then
-                     echo "Succès : Métrique PPO envoyée, code HTTP $STATUS"
-                   else
-                     echo "Erreur : Échec de l'envoi de la métrique PPO, code HTTP $STATUS"
-                     exit 1
-                   fi
-                 done <<< "$EVAL_METRICS"
-               fi
-             else
-               echo "Erreur : evaluation_metrics.json non trouvé. Aucune métrique PPO d'évaluation envoyée."
-               exit 1
-             fi
-           shell: bash
-         - name: Push global success metric to Prometheus
-           run: |
-             STATUS=$(echo "success{job=\"mlflow_and_snakemake_metrics\"} 1" | curl -s -L -w "%{http_code}" --data-binary @- $PUSHGATEWAY_URL/metrics/job/mlflow_and_snakemake_metrics -o /dev/null)
-             if [ "$STATUS" -eq 200 ]; then
-               echo "Succès : Métrique success envoyée, code HTTP $STATUS"
-             else
-               echo "Erreur : Échec de l'envoi de la métrique success, code HTTP $STATUS"
-               exit 1
-             fi
-           shell: bash
-         - name: Check metrics in PushGateway
-           run: |
-             echo "🔍 Vérification des métriques dans PushGateway..."
-             curl -s -L $PUSHGATEWAY_URL/metrics | grep -E 'scale|loss|mae|mse|aic|bic|llf|r2_score|rmse|df_model|df_resid|success|avg_reward|avg_cycles|avg_accuracy|total_reward|cycles|accuracy' || echo "⚠️ Pas de métriques visibles"
-           shell: bash
-         - name: Complete Monitoring
-           run: |
-             echo "✅ Fin de l'exécution, vérification via Grafana et Prometheus"
-           shell: bash
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v3
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.9'
+      - name: Set up virtual environment and install dependencies
+        run: |
+          python -m venv venv
+          source venv/bin/activate
+          pip install --upgrade pip
+          pip install mlflow prometheus_client jq snakemake pulp==2.4 pulp[cbc] stable-baselines3 gym pandas numpy matplotlib shimmy jupyter nbconvert papermill google-auth google-auth-oauthlib google-api-python-client ipykernel
+          pip list | grep ipykernel || { echo "Erreur : ipykernel non installé"; exit 1; }
+          pip list | grep google-api-python-client || { echo "Erreur : google-api-python-client non installé"; exit 1; }
+        shell: bash
+      - name: Install Jupyter kernel
+        run: |
+          source venv/bin/activate
+          python -m ipykernel install --user --name python3 --display-name "Python 3 (venv)"
+          echo "Kernel Jupyter installé avec succès."
+        shell: bash
+      - name: Save Google Drive token
+        run: |
+          echo '{"token": "ya29.a0AZYkNZigxH1DhQugv99ZweJfyZdWkklt1F9Ntn6JM5XFhf0q9Km2kecSEgHEgo1zNgKoRWJOUCkGjuGk96SHJKfTIEOMKEYWvzA1Ko3jTx1PR7i_SHwU8wgq-gZ29dwemUnKwgw2jxU0hp9U8jbFI9ZG6bAI9_3WHQ8VMt0xaCgYKAUQSARISFQHGX2Mi1HZSkTbbdf6FiXHFeKU_eA0175", "refresh_token": "1//09sy1DZcnY3jZCgYIARAAGAkSNwF-L9IrW4JaBOZSELGp4ClKWKCcDHRF0kD-Qpw2hOzkXtW-54-pNI29lU0rMPPI63IfdPtxYaE", "token_uri": "https://oauth2.googleapis.com/token", "client_id": "27688368522-s8f6r2og4ikhm9ngnnkgnvtkq01ahu4u.apps.googleusercontent.com", "client_secret": "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", "scopes": ["https://www.googleapis.com/auth/drive"], "universe_domain": "googleapis.com", "account": "", "expiry": "2025-05-03T23:38:04.625991Z"}' | jq '.' > token.json
+          if [ -s token.json ]; then
+            echo "token.json créé avec succès."
+            cat token.json | jq . || { echo "Erreur : token.json n'est pas un JSON valide"; exit 1; }
+          else
+            echo "Erreur : token.json est vide ou n'a pas pu être créé."
+            exit 1
+          fi
+        shell: bash
+      - name: Download notebook and scripts
+        run: |
+          wget https://raw.githubusercontent.com/elmekadem-narjiss/BackUp_ML/refs/heads/main/Backend/ppo_pipeline.ipynb -O ppo_pipeline.ipynb
+          wget https://raw.githubusercontent.com/elmekadem-narjiss/BackUp_ML/refs/heads/main/Backend/train_ppo.py -O train_ppo.py
+          wget https://raw.githubusercontent.com/elmekadem-narjiss/BackUp_ML/refs/heads/main/Backend/evaluate_ppo.py -O evaluate_ppo.py
+          wget https://raw.githubusercontent.com/elmekadem-narjiss/BackUp_ML/refs/heads/main/Backend/BESSBatteryEnv.py -O BESSBatteryEnv.py
+        shell: bash
+      - name: Download LSTM predictions from Google Drive
+        run: |
+          source venv/bin/activate
+          python Backend/download_file.py || { echo "Échec de l'étape Download LSTM predictions from Google Drive"; exit 1; }
+          if [ -f lstm_predictions_charger.csv ]; then
+            echo "Fichier lstm_predictions_charger.csv téléchargé avec succès."
+            ls -l lstm_predictions_charger.csv
+          else
+            echo "Erreur : lstm_predictions_charger.csv n'a pas été créé."
+            exit 1
+          fi
+        shell: bash
+      - name: Execute notebook
+        run: |
+          source venv/bin/activate
+          mkdir -p output
+          python -m papermill ppo_pipeline.ipynb output/ppo_pipeline_executed.ipynb \
+            -p MLFLOW_URL $MLFLOW_URL \
+            -p PUSHGATEWAY_URL $PUSHGATEWAY_URL \
+            -p output_dir output \
+            -p file_path lstm_predictions_charger.csv \
+            --kernel python3
+          echo "Vérification des fichiers JSON générés :"
+          ls -l output/*.json || echo "Aucun fichier JSON trouvé dans output/"
+        shell: bash
+      - name: Check PushGateway accessibility
+        run: |
+          echo "Vérification de l'accessibilité de la PushGateway : $PUSHGATEWAY_URL"
+          echo "Envoi de la métrique de test vers $PUSHGATEWAY_URL/metrics/job/mlflow_and_snakemake_metrics"
+          STATUS=$(echo "test_accessibility{job=\"mlflow_and_snakemake_metrics\"} 1" | curl -s -L -w "%{http_code}" --data-binary @- $PUSHGATEWAY_URL/metrics/job/mlflow_and_snakemake_metrics -o /dev/null)
+          if [ "$STATUS" -eq 200 ]; then
+            echo "PushGateway accessible, code HTTP : $STATUS"
+            echo "Vérification de la métrique test_accessibility dans PushGateway :"
+            curl -s -L $PUSHGATEWAY_URL/metrics | grep test_accessibility || echo "Métrique test_accessibility non trouvée"
+          else
+            echo "Erreur : PushGateway renvoie le code HTTP $STATUS"
+            echo "Débogage : En-têtes de la requête POST :"
+            curl -v -L -X POST $PUSHGATEWAY_URL/metrics/job/mlflow_and_snakemake_metrics 2>&1 || echo "Échec de la requête POST"
+            echo "Débogage : En-têtes de la requête GET pour l'endpoint metrics :"
+            curl -v -L $PUSHGATEWAY_URL/metrics 2>&1 || echo "Échec de la requête GET"
+            exit 1
+          fi
+        shell: bash
+      - name: Push selected MLFlow metrics to Prometheus
+        run: |
+          source venv/bin/activate
+          declare -A metrics_92f5=(
+            [loss]=0.04144944250583649
+            [mae]=0.1347774024638297
+            [mse]=0.039917658308037784
+            [r2_score]=0.6619863834818595
+            [rmse]=0.19979403972100315
+          )
+          declare -A metrics_ad0c=(
+            [aic]=3157.583271036795
+            [bic]=3180.9434357641003
+            [df_model]=5
+            [df_resid]=Inf
+            [llf]=-1573.7916355183975
+            [mse]=0.005455112014267468
+            [scale]=1
+          )
+          echo "Envoi des métriques metrics_92f5..."
+          for key in "${!metrics_92f5[@]}"; do
+            value=${metrics_92f5[$key]}
+            echo "Envoi : $key{run=\"92f5893e1dbe4175a3f4313bc89c56b4\",job=\"mlflow_and_snakemake_metrics\"} $value"
+            STATUS=$(echo "$key{run=\"92f5893e1dbe4175a3f4313bc89c56b4\",job=\"mlflow_and_snakemake_metrics\"} $value" | curl -s -L -w "%{http_code}" --data-binary @- $PUSHGATEWAY_URL/metrics/job/mlflow_and_snakemake_metrics -o /dev/null)
+            if [ "$STATUS" -eq 200 ]; then
+              echo "Succès : Métrique $key envoyée, code HTTP $STATUS"
+            else
+              echo "Erreur : Échec de l'envoi de la métrique $key, code HTTP $STATUS"
+              exit 1
+            fi
+          done
+          echo "Envoi des métriques metrics_ad0c..."
+          for key in "${!metrics_ad0c[@]}"; do
+            value=${metrics_ad0c[$key]}
+            echo "Envoi : $key{run=\"ad0cf78265204f34b84a40aa09895c7f\",job=\"mlflow_and_snakemake_metrics\"} $value"
+            STATUS=$(echo "$key{run=\"ad0cf78265204f34b84a40aa09895c7f\",job=\"mlflow_and_snakemake_metrics\"} $value" | curl -s -L -w "%{http_code}" --data-binary @- $PUSHGATEWAY_URL/metrics/job/mlflow_and_snakemake_metrics -o /dev/null)
+            if [ "$STATUS" -eq 200 ]; then
+              echo "Succès : Métrique $key envoyée, code HTTP $STATUS"
+            else
+              echo "Erreur : Échec de l'envoi de la métrique $key, code HTTP $STATUS"
+              exit 1
+            fi
+          done
+          echo "Vérification des fichiers PPO JSON :"
+          if [ -f output/ppo_bess_model_metrics.json ]; then
+            echo "Fichier ppo_bess_model_metrics.json trouvé. Contenu :"
+            cat output/ppo_bess_model_metrics.json | jq . || echo "Erreur : ppo_bess_model_metrics.json n'est pas un JSON valide"
+            TRAIN_METRICS=$(cat output/ppo_bess_model_metrics.json | jq -r 'to_entries[] | .key + "{run=\"ppo_training\",job=\"ppo_metrics\"} " + (.value | tostring)')
+            if [ -z "$TRAIN_METRICS" ]; then
+              echo "Erreur : Aucune métrique trouvée dans ppo_bess_model_metrics.json"
+              exit 1
+            else
+              while IFS= read -r metric; do
+                echo "Envoi de la métrique PPO (entraînement) : $metric"
+                STATUS=$(echo "$metric" | curl -s -L -w "%{http_code}" --data-binary @- $PUSHGATEWAY_URL/metrics/job/ppo_metrics -o /dev/null)
+                if [ "$STATUS" -eq 200 ]; then
+                  echo "Succès : Métrique PPO envoyée, code HTTP $STATUS"
+                else
+                  echo "Erreur : Échec de l'envoi de la métrique PPO, code HTTP $STATUS"
+                  exit 1
+                fi
+              done <<< "$TRAIN_METRICS"
+            fi
+          else
+            echo "Erreur : ppo_bess_model_metrics.json non trouvé. Aucune métrique PPO d'entraînement envoyée."
+            exit 1
+          fi
+          if [ -f output/evaluation_metrics.json ]; then
+            echo "Fichier evaluation_metrics.json trouvé. Contenu :"
+            cat output/evaluation_metrics.json | jq . || echo "Erreur : evaluation_metrics.json n'est pas un JSON valide"
+            EVAL_METRICS=$(cat output/evaluation_metrics.json | jq -r 'to_entries[] | .key + "{run=\"ppo_evaluation\",job=\"ppo_metrics\"} " + (.value | tostring)')
+            if [ -z "$EVAL_METRICS" ]; then
+              echo "Erreur : Aucune métrique trouvée dans evaluation_metrics.json"
+              exit 1
+            else
+              while IFS= read -r metric; do
+                echo "Envoi de la métrique PPO (évaluation) : $metric"
+                STATUS=$(echo "$metric" | curl -s -L -w "%{http_code}" --data-binary @- $PUSHGATEWAY_URL/metrics/job/ppo_metrics -o /dev/null)
+                if [ "$STATUS" -eq 200 ]; then
+                  echo "Succès : Métrique PPO envoyée, code HTTP $STATUS"
+                else
+                  echo "Erreur : Échec de l'envoi de la métrique PPO, code HTTP $STATUS"
+                  exit 1
+                fi
+              done <<< "$EVAL_METRICS"
+            fi
+          else
+            echo "Erreur : evaluation_metrics.json non trouvé. Aucune métrique PPO d'évaluation envoyée."
+            exit 1
+          fi
+        shell: bash
+      - name: Push global success metric to Prometheus
+        run: |
+          STATUS=$(echo "success{job=\"mlflow_and_snakemake_metrics\"} 1" | curl -s -L -w "%{http_code}" --data-binary @- $PUSHGATEWAY_URL/metrics/job/mlflow_and_snakemake_metrics -o /dev/null)
+          if [ "$STATUS" -eq 200 ]; then
+            echo "Succès : Métrique success envoyée, code HTTP $STATUS"
+          else
+            echo "Erreur : Échec de l'envoi de la métrique success, code HTTP $STATUS"
+            exit 1
+          fi
+        shell: bash
+      - name: Check metrics in PushGateway
+        run: |
+          echo "🔍 Vérification des métriques dans PushGateway..."
+          curl -s -L $PUSHGATEWAY_URL/metrics | grep -E 'scale|loss|mae|mse|aic|bic|llf|r2_score|rmse|df_model|df_resid|success|avg_reward|avg_cycles|avg_accuracy|total_reward|cycles|accuracy' || echo "⚠️ Pas de métriques visibles"
+        shell: bash
+      - name: Complete Monitoring
+        run: |
+          echo "✅ Fin de l'exécution, vérification via Grafana et Prometheus"
+        shell: bash
 
-     test:
-       runs-on: ubuntu-latest
-       steps:
-         - name: Checkout code
-           uses: actions/checkout@v3
-         - name: Set up Python
-           uses: actions/setup-python@v4
-           with:
-             python-version: '3.9'
-         - name: Install dependencies
-           run: |
-             python -m pip install --upgrade pip
-             pip install pytest numpy pandas stable-baselines3 gym
-           shell: bash
-         - name: Run tests
-           run: |
-             pytest Backend/tests/ --verbose
-           shell: bash
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v3
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.9'
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install pytest numpy pandas stable-baselines3 gym
+        shell: bash
+      - name: Run tests
+        run: |
+          pytest Backend/tests/ --verbose
+        shell: bash
