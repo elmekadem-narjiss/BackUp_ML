@@ -3,7 +3,6 @@ import pytest_asyncio
 import respx
 from fastapi.testclient import TestClient
 from app.main import app
-from app.services.enrich_data import enrich_data
 
 client = TestClient(app)
 
