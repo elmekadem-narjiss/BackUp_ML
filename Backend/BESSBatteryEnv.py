@@ -10,11 +10,22 @@ class BESSBatteryEnv(gym.Env):
         # Charger les données
         self.data = pd.read_csv(data_path)
         
+        # Identifier les colonnes pour l'environnement
+        self.price_column = next((col for col in ['energy_price', 'price'] if col in self.data.columns), None)
+        self.demand_column = next((col for col in ['predicted_demand', 'energyproduced', 'demand'] if col in self.data.columns), None)
+        
         # Vérifier la présence des colonnes nécessaires
-        required_columns = ['energy_price', 'predicted_demand']
-        missing_columns = [col for col in required_columns if col not in self.data.columns]
+        missing_columns = []
+        if self.price_column is None:
+            missing_columns.append('energy_price ou price')
+        if self.demand_column is None:
+            missing_columns.append('predicted_demand, energyproduced ou demand')
         if missing_columns:
-            raise ValueError(f"Colonnes manquantes dans le CSV : {missing_columns}")
+            available_columns = list(self.data.columns)
+            raise ValueError(
+                f"Colonnes manquantes dans le CSV : {missing_columns}. "
+                f"Colonnes disponibles : {available_columns}"
+            )
         
         # Paramètres de la batterie
         self.capacity = 100.0  # Capacité de la batterie en kWh
@@ -69,13 +80,15 @@ class BESSBatteryEnv(gym.Env):
         return self._get_observation(), reward, done, {}
 
     def _get_observation(self):
-        energy_price = self.data.iloc[self.current_step]['energy_price']
-        predicted_demand = self.data.iloc[self.current_step]['predicted_demand']
+        # Utiliser une valeur par défaut pour energy_price si la colonne est absente
+        energy_price = self.data.iloc[self.current_step][self.price_column] if self.price_column else 0.1
+        predicted_demand = self.data.iloc[self.current_step][self.demand_column]
         return np.array([self.state_of_charge, energy_price, predicted_demand], dtype=np.float32)
 
     def _calculate_reward(self, action):
-        energy_price = self.data.iloc[self.current_step]['energy_price']
-        predicted_demand = self.data.iloc[self.current_step]['predicted_demand']
+        # Utiliser une valeur par défaut pour energy_price si la colonne est absente
+        energy_price = self.data.iloc[self.current_step][self.price_column] if self.price_column else 0.1
+        predicted_demand = self.data.iloc[self.current_step][self.demand_column]
         
         # Récompense basée sur le coût et la satisfaction de la demande
         cost = action * energy_price
