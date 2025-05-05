@@ -14,7 +14,7 @@ INFLUX_ORG = os.getenv("INFLUX_ORG", "iot_lab")
 INFLUX_BUCKET = os.getenv("INFLUX_BUCKET", "energy_data")
 
 # Configuration du modèle LSTM
-MODEL_PATH = "model/lstm_model"
+MODEL_PATH = "model/lstm_model.keras"
 SCALER_PATH = "model/scaler.pkl"
 SEQ_LENGTH = 60
 PREDICTION_DAYS = 30
@@ -60,6 +60,9 @@ def prepare_data(df):
         y.append(scaled_data[i:i+PREDICTION_DAYS])
     X, y = np.array(X), np.array(y)
     
+    # Ajuster la forme de y pour correspondre à la sortie du modèle
+    y = y.reshape(y.shape[0], PREDICTION_DAYS, len(FEATURES))
+    
     return X, y, scaler
 
 def build_model():
@@ -67,7 +70,9 @@ def build_model():
     model = Sequential([
         LSTM(50, activation='relu', input_shape=(SEQ_LENGTH, len(FEATURES)), return_sequences=True),
         LSTM(50, activation='relu'),
-        Dense(PREDICTION_DAYS * len(FEATURES))
+        Dense(PREDICTION_DAYS * len(FEATURES)),
+        # Ajouter une couche Reshape pour conserver la forme [PREDICTION_DAYS, len(FEATURES)]
+        tf.keras.layers.Reshape((PREDICTION_DAYS, len(FEATURES)))
     ])
     model.compile(optimizer='adam', loss='mse')
     return model
@@ -80,6 +85,7 @@ def train_and_save():
     model = build_model()
     history = model.fit(X, y, epochs=10, batch_size=32, validation_split=0.2, verbose=0)
     
+    os.makedirs(os.path.dirname(MODEL_PATH), exist_ok=True)
     model.save(MODEL_PATH)
     with open(SCALER_PATH, 'wb') as f:
         pickle.dump(scaler, f)
