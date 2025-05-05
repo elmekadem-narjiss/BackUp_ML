@@ -10,7 +10,7 @@ from app.services.lstm_model import (
     save_predictions_to_db,
 )
 
-# 🧪 Fixture pour créer un DataFrame de test
+# Fixture pour créer un DataFrame de test
 @pytest.fixture
 def sample_df():
     data = {
@@ -23,33 +23,33 @@ def sample_df():
     }
     return pd.DataFrame(data)
 
-# ✅ Test de la fonction prepare_data
+# Test de la fonction prepare_data
 def test_prepare_data(sample_df):
     X, y, scaler = prepare_data(sample_df)
     assert X.shape[1:] == (60, 6)
     assert y.shape[1:] == (30, 6)
     assert X.shape[0] == y.shape[0]
 
-# ✅ Test de build_model
+# Test de build_model
 def test_build_model():
     model = build_model()
     assert model is not None
     assert model.input_shape == (None, 60, 6)
 
-# ✅ Test de train_and_save avec monkeypatch
+# Test de train_and_save avec monkeypatch
 def test_train_and_save(sample_df, monkeypatch):
     monkeypatch.setattr("app.services.lstm_model.load_data_from_influx", lambda: sample_df)
     model, scaler = train_and_save()
     assert model is not None
     assert scaler is not None
 
-# ✅ Test de load_model (suppose que le modèle est déjà sauvé)
+# Test de load_model (suppose que le modèle est déjà sauvegardé)
 def test_load_model():
     model, scaler = load_model()
     assert model is not None
     assert scaler is not None
 
-# ✅ Test de save_predictions_to_db avec patch de la DB
+# Test de save_predictions_to_db avec patch de la DB
 def test_save_predictions_to_db(monkeypatch):
     fake_conn = MagicMock()
     fake_cursor = MagicMock()
