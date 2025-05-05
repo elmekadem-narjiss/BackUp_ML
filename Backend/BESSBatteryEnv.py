@@ -9,7 +9,19 @@ class BESSBatteryEnv(gym.Env):
         
         # Charger les données
         self.data = pd.read_csv(data_path)
-        self.data['timestamp'] = pd.to_datetime(self.data['timestamp'])
+        
+        # Identifier la colonne temporelle
+        time_columns = ['timestamp', 'time', 'datetime']
+        self.time_column = next((col for col in time_columns if col in self.data.columns), None)
+        if self.time_column is None:
+            raise ValueError("Aucune colonne temporelle trouvée dans le CSV. Colonnes attendues : 'timestamp', 'time', ou 'datetime'.")
+        self.data[self.time_column] = pd.to_datetime(self.data[self.time_column])
+        
+        # Vérifier la présence des colonnes nécessaires
+        required_columns = ['energy_price', 'predicted_demand']
+        missing_columns = [col for col in required_columns if col not in self.data.columns]
+        if missing_columns:
+            raise ValueError(f"Colonnes manquantes dans le CSV : {missing_columns}")
         
         # Paramètres de la batterie
         self.capacity = 100.0  # Capacité de la batterie en kWh
