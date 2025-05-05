@@ -2,6 +2,7 @@ import pytest
 from fastapi.testclient import TestClient
 from app.main import app
 import os
+import pandas as pd
 
 client = TestClient(app)
 
@@ -12,15 +13,15 @@ def fake_csv(tmp_path):
 2024,4,6,12,22.5,45,100,1,5.2,10.5,2024-04-06 12:00:00
 2024,4,6,13,23.0,44,100,0,5.5,11.0,2024-04-06 13:00:00
 """
-
     file_path = tmp_path / "test_data.csv"
     file_path.write_text(fake_data)
-    
-    # Redéfinir le chemin dans app.main
-    import app.main
-    app.main.FILE_CSV = str(file_path)  # 👈 Redirection du chemin du fichier CSV
-
     return file_path
+
+@pytest.fixture(autouse=True)
+def setup_file_csv(fake_csv, monkeypatch):
+    # Redéfinir le chemin du fichier CSV dans app.main pour chaque test
+    import app.main
+    monkeypatch.setattr(app.main, "FILE_CSV", str(fake_csv))
 
 def test_load_data(fake_csv):
     # Tester le chargement des données via l'API
@@ -38,8 +39,6 @@ def test_load_data(fake_csv):
     assert len(json_data["data"]) > 0
     assert json_data["nombre_de_lignes"] == 2  # Comme il y a 2 lignes dans le CSV fictif
 
-
-# Test pour l'endpoint /forecast avec données valides
 def test_forecast_data(fake_csv):
     # Charger les données
     client.get("/load-data")
@@ -56,18 +55,16 @@ def test_forecast_data(fake_csv):
     assert "forecast" in json_data
     assert isinstance(json_data["forecast"], dict)  # Vérifier que la prévision est un dictionnaire
 
-# Test pour /forecast sans charger les données
-def test_forecast_no_data():
-    # Clear any existing data in cache
-    global data_cache
-    data_cache = None  # Ensure that data_cache is None (or empty)
-
-    # Test the /forecast endpoint without data being loaded
+def test_forecast_no_data(monkeypatch):
+    # Mocker l'absence de données dans app.main
+    import app.main
+    monkeypatch.setattr(app.main, "data_cache", None)
+    
+    # Tester l'endpoint /forecast sans données chargées
     response = client.get("/forecast")
     assert response.status_code == 400
     assert response.json()["detail"] == "Colonnes manquantes : ['energyconsumption']"
 
-# Test pour /forecast avec données invalides (ex: colonnes manquantes)
 def test_forecast_invalid_data(fake_csv):
     # Simuler un CSV sans la colonne 'energyconsumption'
     invalid_data = """Year,Month,Day,Hour,Temperature,Humidity,SquareFootage,Occupancy,RenewableEnergy
