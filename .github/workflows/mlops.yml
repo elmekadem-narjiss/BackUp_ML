@@ -221,9 +221,10 @@ jobs:
       - name: Install dependencies
         run: |
           python -m pip install --upgrade pip
-          pip install pytest numpy pandas stable-baselines3 gym
+          pip install pytest numpy pandas stable-baselines3 gym fastapi uvicorn tensorflow
         shell: bash
       - name: Run tests
         run: |
+          export PYTHONPATH=$PYTHONPATH:$GITHUB_WORKSPACE
           pytest Backend/tests/ --verbose
         shell: bash
