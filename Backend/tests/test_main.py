@@ -1,6 +1,7 @@
 import pytest
 import pytest_asyncio
 import respx
+import httpx
 from fastapi.testclient import TestClient
 from app.main import app
 
@@ -9,7 +10,7 @@ client = TestClient(app)
 @pytest_asyncio.fixture
 async def mock_external_api():
     with respx.mock(base_url="https://api.example.com") as mock:
-        mock.get("/data").mock(return_value=Response(200, json={"energyproduced": 100, "temperature": 25}))
+        mock.get("/data").mock(return_value=httpx.Response(200, json={"energyproduced": 100, "temperature": 25}))
         yield mock
 
 @pytest.mark.asyncio
