@@ -1,3 +1,4 @@
+import os
 from fastapi import FastAPI
 from contextlib import asynccontextmanager
 from app.database.db_connection import connect_influxdb, connect_mqtt
