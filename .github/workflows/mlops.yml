@@ -385,9 +385,3 @@ jobs:
           DURATION=$((END_TIME - START_TIME))
           echo "workflow_duration{job=\"integration_test\",repository=\"${{ github.repository }}\"} $DURATION" | curl -s -L --data-binary @- $PUSHGATEWAY_URL/metrics/job/workflow_metrics
         shell: bash
-
-      - name: Clean up old artifacts
-        uses: crazy-max/ghaction-cleanup-artifacts@v1
-        with:
-          artifact-name: test-artifacts
-          older-than-days: 7
