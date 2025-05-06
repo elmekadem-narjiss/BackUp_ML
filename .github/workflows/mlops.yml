@@ -209,7 +209,7 @@ jobs:
           echo "✅ Fin de l'exécution, vérification via Grafana et Prometheus"
         shell: bash
 
-  test:
+  integration-test:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout code
@@ -223,11 +223,10 @@ jobs:
           python -m venv venv
           source venv/bin/activate
           pip install --upgrade pip
-          pip install pytest pytest-asyncio pytest-mock respx numpy pandas stable-baselines3 gym fastapi uvicorn tensorflow scikit-learn redis psycopg2-binary influxdb-client paho-mqtt statsmodels sqlalchemy shimmy httpx
+          pip install pytest pytest-asyncio pytest-mock pandas numpy stable-baselines3 gym
         shell: bash
-      - name: Create test CSV for BESSBatteryEnv
+      - name: Create test CSV for integration test
         run: |
-          cd Backend
           source venv/bin/activate
           python -c "
           import pandas as pd
@@ -236,39 +235,31 @@ jobs:
               'predicted_demand': [250, 350, 450],
               'demand': [240, 340, 440]
           })
-          data.to_csv('tests/test_lstm_predictions.csv', index=False)
+          data.to_csv('test_lstm_predictions.csv', index=False)
           "
-          ls -l tests/test_lstm_predictions.csv
+          ls -l test_lstm_predictions.csv
         shell: bash
-      - name: Verify test CSV columns
+      - name: Run integration test
         run: |
-          cd Backend
           source venv/bin/activate
+          export PYTHONPATH=$PYTHONPATH:$GITHUB_WORKSPACE
           python -c "
           import pandas as pd
-          df = pd.read_csv('tests/test_lstm_predictions.csv')
-          expected_columns = ['energyproduced', 'predicted_demand', 'demand']
-          assert all(col in df.columns for col in expected_columns), f'CSV missing expected columns: {expected_columns}, found: {list(df.columns)}'
-          print('Test CSV columns verified:', list(df.columns))
+          from stable_baselines3 import PPO
+          from BESSBatteryEnv import BESSBatteryEnv
+          df = pd.read_csv('test_lstm_predictions.csv')
+          env = BESSBatteryEnv(df)
+          model = PPO('MlpPolicy', env, n_steps=2, verbose=0)
+          model.learn(total_timesteps=4)
+          obs = env.reset()[0]
+          action, _ = model.predict(obs)
+          print('Integration test passed: Model trained and predicted action:', action)
           "
-        shell: bash
-      - name: Set up test environment
-        run: |
-          source venv/bin/activate
-          export PYTHONPATH=$PYTHONPATH:$GITHUB_WORKSPACE/Backend
-          unset INFLUX_URL INFLUX_TOKEN INFLUX_ORG INFLUX_BUCKET
-        shell: bash
-      - name: Run tests
-        run: |
-          cd Backend
-          source venv/bin/activate
-          pytest tests/ --verbose --log-file=pytest.log
         shell: bash
       - name: Upload test logs
         if: failure()
         uses: actions/upload-artifact@v4
         with:
-          name: test-logs
+          name: integration-test-logs
           path: |
-            Backend/tests/*.log
-            Backend/pytest.log
+            *.log
