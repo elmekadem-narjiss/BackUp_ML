@@ -239,10 +239,11 @@ jobs:
       - name: Notify on build results
         if: always()
         uses: slackapi/slack-github-action@v1.23.0
+        env:
+          SLACK_BOT_TOKEN: ${{ secrets.SLACK_BOT_TOKEN }}
         with:
-          slack-bot-token: ${{ secrets.SLACK_BOT_TOKEN }}
           channel-id: 'ci-notifications'
-          text: |
+          slack-message: |
             Build job for ${{ github.repository }} completed.
             Status: ${{ job.status }}
             Run: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
@@ -354,10 +355,11 @@ jobs:
       - name: Notify on test results
         if: always()
         uses: slackapi/slack-github-action@v1.23.0
+        env:
+          SLACK_BOT_TOKEN: ${{ secrets.SLACK_BOT_TOKEN }}
         with:
-          slack-bot-token: ${{ secrets.SLACK_BOT_TOKEN }}
           channel-id: 'ci-notifications'
-          text: |
+          slack-message: |
             Integration test for ${{ github.repository }} completed.
             Status: ${{ job.status }}
             Run: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
@@ -372,7 +374,7 @@ jobs:
         shell: bash
 
       - name: Clean up old artifacts
-        uses: actions/delete-artifact@v1
+        uses: crazy-max/ghaction-cleanup-artifacts@v1
         with:
           artifact-name: test-artifacts
           older-than-days: 7
