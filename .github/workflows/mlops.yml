@@ -227,8 +227,8 @@ jobs:
         shell: bash
       - name: Create test CSV for BESSBatteryEnv
         run: |
+          source $GITHUB_WORKSPACE/venv/bin/activate
           cd Backend
-          source venv/bin/activate
           python -c "
           import pandas as pd
           data = pd.DataFrame({
@@ -242,11 +242,11 @@ jobs:
         shell: bash
       - name: Verify test CSV columns
         run: |
+          source $GITHUB_WORKSPACE/venv/bin/activate
           cd Backend
-          source venv/bin/activate
           python -c "
           import pandas as pd
-          df = pd.read_csv('tests/test_lstm_predictions.csv')
+          df = pd.Read_csv('tests/test_lstm_predictions.csv')
           expected_columns = ['energyproduced', 'predicted_demand', 'demand']
           assert all(col in df.columns for col in expected_columns), f'CSV missing expected columns: {expected_columns}, found: {list(df.columns)}'
           print('Test CSV columns verified:', list(df.columns))
@@ -254,14 +254,14 @@ jobs:
         shell: bash
       - name: Set up test environment
         run: |
-          source venv/bin/activate
+          source $GITHUB_WORKSPACE/venv/bin/activate
           export PYTHONPATH=$PYTHONPATH:$GITHUB_WORKSPACE/Backend
           unset INFLUX_URL INFLUX_TOKEN INFLUX_ORG INFLUX_BUCKET
         shell: bash
       - name: Run tests
         run: |
+          source $GITHUB_WORKSPACE/venv/bin/activate
           cd Backend
-          source venv/bin/activate
           pytest tests/ --verbose --log-file=pytest.log
         shell: bash
       - name: Upload test logs
