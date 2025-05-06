@@ -232,12 +232,15 @@ import pytest
 from fastapi.testclient import TestClient
 from app.main import app
 from app.services.lstm_model import MODEL, SCALER, SEQ_LENGTH, PREDICTION_DAYS, load_model, save_predictions_to_db
+
 client = TestClient(app)
+
 @pytest.mark.asyncio
 async def test_read_root():
     response = client.get("/")
     assert response.status_code == 200
     assert response.json() == {"message": "Welcome to the LSTM Prediction API"}
+
 @pytest.mark.asyncio
 async def test_predict_endpoint(mocker):
     # Mock load_model and save_predictions_to_db
@@ -261,11 +264,13 @@ EOF
 import pytest
 import numpy as np
 from app.services.lstm_model import load_model, save_predictions_to_db
+
 @pytest.mark.asyncio
 async def test_load_model(mocker):
     mocker.patch("app.services.lstm_model.load_model", return_value=mocker.MagicMock())
     model = load_model()
     assert model is not None
+
 @pytest.mark.asyncio
 async def test_save_predictions_to_db(mocker):
     mocker.patch("app.services.lstm_model.save_predictions_to_db", return_value=None)
@@ -281,13 +286,17 @@ from fastapi import FastAPI
 from pydantic import BaseModel
 import numpy as np
 from app.services.lstm_model import MODEL, SCALER, SEQ_LENGTH, PREDICTION_DAYS, load_model, save_predictions_to_db
+
 app = FastAPI()
+
 class PredictionInput(BaseModel):
     data: list
     days: int
+
 @app.get("/")
 async def read_root():
     return {"message": "Welcome to the LSTM Prediction API"}
+
 @app.post("/predict/")
 async def predict(input_data: PredictionInput):
     model = load_model()
