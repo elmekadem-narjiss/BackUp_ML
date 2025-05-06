@@ -228,6 +228,7 @@ jobs:
       - name: Create test CSV for BESSBatteryEnv
         run: |
           cd Backend
+          source venv/bin/activate
           python -c "
           import pandas as pd
           data = pd.DataFrame({
@@ -237,11 +238,12 @@ jobs:
           })
           data.to_csv('tests/test_lstm_predictions.csv', index=False)
           "
-          ls -l Backend/tests/test_lstm_predictions.csv
+          ls -l tests/test_lstm_predictions.csv
         shell: bash
       - name: Verify test CSV columns
         run: |
           cd Backend
+          source venv/bin/activate
           python -c "
           import pandas as pd
           df = pd.read_csv('tests/test_lstm_predictions.csv')
