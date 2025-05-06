@@ -237,7 +237,7 @@ jobs:
           })
           data.to_csv('tests/test_lstm_predictions.csv', index=False)
           "
-          ls -l tests/test_lstm_predictions.csv
+          ls -l Backend/tests/test_lstm_predictions.csv
         shell: bash
       - name: Verify test CSV columns
         run: |
@@ -264,7 +264,7 @@ jobs:
         shell: bash
       - name: Upload test logs
         if: failure()
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         with:
           name: test-logs
           path: |
