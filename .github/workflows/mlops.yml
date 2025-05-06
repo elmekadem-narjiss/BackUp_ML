@@ -246,7 +246,7 @@ jobs:
           cd Backend
           python -c "
           import pandas as pd
-          df = pd.Read_csv('tests/test_lstm_predictions.csv')
+          df = pd.read_csv('tests/test_lstm_predictions.csv')
           expected_columns = ['energyproduced', 'predicted_demand', 'demand']
           assert all(col in df.columns for col in expected_columns), f'CSV missing expected columns: {expected_columns}, found: {list(df.columns)}'
           print('Test CSV columns verified:', list(df.columns))
