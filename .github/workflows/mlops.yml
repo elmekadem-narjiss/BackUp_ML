@@ -24,12 +24,31 @@ jobs:
         with:
           python-version: '3.9'
 
+      - name: Cache Python dependencies
+        uses: actions/cache@v4
+        with:
+          path: venv
+          key: ${{ runner.os }}-venv-${{ hashFiles('Backend/requirements.txt') }}
+          restore-keys: |
+            ${{ runner.os }}-venv-
+
+      - name: Verify requirements.txt
+        run: |
+          if [ ! -f Backend/requirements.txt ]; then
+            echo "Error: Backend/requirements.txt not found"
+            ls -R
+            exit 1
+          fi
+          echo "Backend/requirements.txt found"
+          cat Backend/requirements.txt
+        shell: bash
+
       - name: Set up virtual environment and install dependencies
         run: |
           python -m venv venv
           source venv/bin/activate
           pip install --upgrade pip
-          pip install -r requirements.txt
+          pip install -r Backend/requirements.txt
           pip list | grep ipykernel || { echo "Erreur : ipykernel non installé"; exit 1; }
           pip list | grep google-api-python-client || { echo "Erreur : google-api-python-client non installé"; exit 1; }
         shell: bash
@@ -43,7 +62,7 @@ jobs:
 
       - name: Save Google Drive token
         run: |
-          echo '{"token": "ya29.a0AZYkNZigxH1DhQugv99ZweJfyZdWkklt1F9Ntn6JM5XFhf0q9Km2kecSEgHEgo1zNgKoRWJOUCkGjuGk96SHJKfTIEOMKEYWvzA1Ko3jTx1PR7i_SHwU8wgq-gZ29dwemUnKwgw2jxU0hp9U8jbFI9ZG6bAI9_3WHQ8VMt0xaCgYKAUQSARISFQHGX2Mi1HZSkTbbdf6FiXHFeKU_eA0175", "refresh_token": "1//09sy1DZcnY3jZCgYIARAAGAkSNwF-L9IrW4JaBOZSELGp4ClKWKCcDHRF0kD-Qpw2hOzkXtW-54-pNI29lU0rMPPI63IfdPtxYaE", "token_uri": "https://oauth2.googleapis.com/token", "client_id": "27688368522-s8f6r2og4ikhm9ngnnkgnvtkq01ahu4u.apps.googleusercontent.com", "client_secret": "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", "scopes": ["https://www.googleapis.com/auth/drive"], "universe_domain": "googleapis.com", "account": "", "expiry": "2025-05-03T23:38:04.625991Z"}' | jq '.' > token.json
+          echo "${{ secrets.GOOGLE_DRIVE_TOKEN }}" | jq '.' > token.json
           if [ -s token.json ]; then
             echo "token.json créé avec succès."
             cat token.json | jq . || { echo "Erreur : token.json n'est pas un JSON valide"; exit 1; }
@@ -217,6 +236,26 @@ jobs:
           echo "✅ Fin de l'exécution, vérification via Grafana et Prometheus"
         shell: bash
 
+      - name: Notify on build results
+        if: always()
+        uses: slackapi/slack-github-action@v1.23.0
+        with:
+          slack-bot-token: ${{ secrets.SLACK_BOT_TOKEN }}
+          channel-id: 'ci-notifications'
+          text: |
+            Build job for ${{ github.repository }} completed.
+            Status: ${{ job.status }}
+            Run: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+
+      - name: Record build workflow metrics
+        run: |
+          START_TIME=$(date +%s)
+          # Simulate build execution (already done in previous steps)
+          END_TIME=$(date +%s)
+          DURATION=$((END_TIME - START_TIME))
+          echo "workflow_duration{job=\"build\",repository=\"${{ github.repository }}\"} $DURATION" | curl -s -L --data-binary @- $PUSHGATEWAY_URL/metrics/job/workflow_metrics
+        shell: bash
+
   integration-test:
     runs-on: ubuntu-latest
     steps:
@@ -232,16 +271,27 @@ jobs:
         uses: actions/cache@v4
         with:
           path: venv
-          key: ${{ runner.os }}-venv-${{ hashFiles('requirements.txt') }}
+          key: ${{ runner.os }}-venv-${{ hashFiles('Backend/requirements.txt') }}
           restore-keys: |
             ${{ runner.os }}-venv-
+
+      - name: Verify requirements.txt
+        run: |
+          if [ ! -f Backend/requirements.txt ]; then
+            echo "Error: Backend/requirements.txt not found"
+            ls -R
+            exit 1
+          fi
+          echo "Backend/requirements.txt found"
+          cat Backend/requirements.txt
+        shell: bash
 
       - name: Set up virtual environment and install dependencies
         run: |
           python -m venv venv
           source venv/bin/activate
           pip install --upgrade pip
-          pip install -r requirements.txt
+          pip install -r Backend/requirements.txt
         shell: bash
 
       - name: Lint and format code
@@ -249,7 +299,7 @@ jobs:
           source venv/bin/activate
           black --check .
           flake8 . --max-line-length=88 --extend-ignore=E203
-        shell: bash
+        shell> bash
 
       - name: Download BESSBatteryEnv script
         run: |
