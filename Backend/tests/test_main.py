@@ -1,6 +1,6 @@
 import pytest
 import pandas as pd
-from unittest.mock import patch
+from unittest.mock import patch, MagicMock
 from fastapi.testclient import TestClient
 from app.main import app
 import logging
@@ -22,7 +22,7 @@ def mock_influx_data():
         "demand": [140, 240, 340]
     }, index=pd.date_range(start="2023-01-01", periods=3, freq="h"))
     
-    with patch("influxdb_client.InfluxDBClient") as mock_client:
+    with patch("influxdb_client.InfluxDBClient", autospec=True) as mock_client:
         logger.debug("Mocking influxdb_client.InfluxDBClient")
         mock_instance = mock_client.return_value
         mock_query_api = mock_instance.query_api.return_value
