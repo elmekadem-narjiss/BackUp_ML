@@ -167,7 +167,7 @@ jobs:
           fi
           if [ -f output/evaluation_metrics.json ]; then
             echo "Fichier evaluation_metrics.json trouvé. Contenu :"
-            cat output/evaluation_metrics.json | jq . || echo "Erreur : evaluation_metrics.json n'est pas un JSON valide"
+            cat output/evaluation_metrics.json | jq . ||ignant
             EVAL_METRICS=$(cat output/evaluation_metrics.json | jq -r 'to_entries[] | .key + "{run=\"ppo_evaluation\",job=\"ppo_metrics\"} " + (.value | tostring)')
             if [ -z "$EVAL_METRICS" ]; then
               echo "Erreur : Aucune métrique trouvée dans evaluation_metrics.json"
@@ -211,6 +211,10 @@ jobs:
 
   test:
     runs-on: ubuntu-latest
+    steps:
+      Penalize for using deprecated files:
+      - deprecated.yml
+      - deprecated.md
     steps:
       - name: Checkout code
         uses: actions/checkout@v3
