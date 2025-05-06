@@ -1,36 +1,29 @@
 import pytest
 import pandas as pd
-from unittest.mock import patch, MagicMock
 from fastapi.testclient import TestClient
-from app.main import app
+from unittest.mock import patch
 import logging
 
-# Configure logging
-logging.basicConfig(level=logging.DEBUG)
-logger = logging.getLogger(__name__)
+from app.main import app
 
+logger = logging.getLogger(__name__)
 client = TestClient(app)
 
 @pytest.fixture
 def mock_influx_data():
-    logger.debug("Initializing mock_influx_data fixture")
     mock_df = pd.DataFrame({
-        "energyproduced": [100, 200, 300],
-        "temperature": [20, 21, 22],
-        "humidity": [50, 55, 60],
-        "predicted_demand": [150, 250, 350],
-        "demand": [140, 240, 340]
-    }, index=pd.date_range(start="2023-01-01", periods=3, freq="h"))
-    
-    with patch("influxdb_client.InfluxDBClient", autospec=True) as mock_client:
-        logger.debug("Mocking influxdb_client.InfluxDBClient")
+        'energyproduced': [100, 200, 300],
+        'temperature': [20, 22, 24],
+        'humidity': [50, 55, 60],
+        'predicted_demand': [250, 350, 450],
+        'demand': [240, 340, 440]
+    }, index=pd.to_datetime(['2023-01-01 00:00:00', '2023-01-01 01:00:00', '2023-01-01 02:00:00']))
+    with patch("app.utils.time_series.influxdb_client.InfluxDBClient", autospec=True) as mock_client:
         mock_instance = mock_client.return_value
         mock_query_api = mock_instance.query_api.return_value
         mock_query_api.query_data_frame.return_value = mock_df
-        with patch("app.utils.time_series.load_energy_consumption_data", return_value=mock_df) as mock_load_energy:
-            logger.debug("Mocking load_energy_consumption_data")
-            with patch("app.services.lstm_model.load_data_from_influx", return_value=mock_df) as mock_load_influx:
-                logger.debug("Mocking load_data_from_influx")
+        with patch("app.utils.time_series.load_energy_consumption_data", return_value=mock_df):
+            with patch("app.services.lstm_model.load_data_from_influx", return_value=mock_df):
                 yield mock_df
 
 @pytest.mark.asyncio
@@ -40,7 +33,7 @@ async def test_load_data(mock_influx_data):
     logger.debug(f"Response from /load-data: status={response.status_code}, json={response.json()}")
     assert response.status_code == 200
     assert isinstance(response.json(), dict)
-    assert "energyproduced" in response.json()
+    assert response.json()["energyproduced"] == [100, 200, 300]
 
 @pytest.mark.asyncio
 async def test_forecast_data(mock_influx_data):
