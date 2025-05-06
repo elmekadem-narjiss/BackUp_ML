@@ -1,13 +1,13 @@
-import pandas as pd
-import numpy as np
-from sklearn.preprocessing import MinMaxScaler
-import tensorflow as tf
-from tensorflow.keras.models import Sequential, load_model
-from tensorflow.keras.layers import LSTM, Dense
-from influxdb_client import InfluxDBClient
+from tensorflow.keras.models import load_model as keras_load_model
 import pickle
 import os
 import logging
+from influxdb_client import InfluxDBClient
+import pandas as pd
+import numpy as np
+from sklearn.preprocessing import MinMaxScaler
+from tensorflow.keras.models import Sequential
+from tensorflow.keras.layers import LSTM, Dense
 
 # Configurer le logging
 logging.basicConfig(level=logging.DEBUG)
@@ -30,108 +30,11 @@ FEATURES = ['energyproduced', 'temperature', 'humidity', 'month', 'week_of_year'
 MODEL = None
 SCALER = None
 
-def initialize_model_and_scaler():
-    """Initialiser le modèle et le scaler si nécessaire."""
-    global MODEL, SCALER
-    if MODEL is None or SCALER is None:
-        try:
-            MODEL, SCALER = load_model()
-            logger.debug("Modèle et scaler chargés avec succès depuis %s et %s", MODEL_PATH, SCALER_PATH)
-        except FileNotFoundError:
-            logger.debug("Modèle ou scaler non trouvé, construction d'un nouveau modèle")
-            MODEL = build_model()
-            SCALER = MinMaxScaler()
-
-def load_data_from_influx():
-    """Charger les données depuis InfluxDB."""
-    try:
-        logger.debug("Connexion à InfluxDB : %s", INFLUX_URL)
-        client = InfluxDBClient(url=INFLUX_URL, token=INFLUX_TOKEN, org=INFLUX_ORG)
-        query = f'''
-        from(bucket:"{INFLUX_BUCKET}")
-            |> range(start:-30d)
-            |> filter(fn:(r) => r._measurement == "energy")
-            |> pivot(rowKey:["_time"], columnKey: ["_field"], valueColumn: "_value")
-        '''
-        result = client.query_api().query_data_frame(query)
-        client.close()
-        logger.debug("Données chargées depuis InfluxDB : %s lignes", len(result))
-        return result
-    except Exception as e:
-        logger.error("Erreur lors du chargement des données depuis InfluxDB : %s", e)
-        raise
-
-def prepare_data(df):
-    """Préparer les données pour l'entraînement LSTM."""
-    try:
-        logger.debug("Préparation des données avec les colonnes : %s", FEATURES)
-        df = df[FEATURES].dropna()
-        
-        scaler = MinMaxScaler()
-        scaled_data = scaler.fit_transform(df)
-        
-        X, y = [], []
-        for i in range(SEQ_LENGTH, len(scaled_data) - PREDICTION_DAYS):
-            X.append(scaled_data[i-SEQ_LENGTH:i])
-            y.append(scaled_data[i:i+PREDICTION_DAYS])
-        X, y = np.array(X), np.array(y)
-        
-        # Ajuster la forme de y pour correspondre à la sortie du modèle
-        y = y.reshape(y.shape[0], PREDICTION_DAYS, len(FEATURES))
-        
-        logger.debug("Données préparées : X.shape=%s, y.shape=%s", X.shape, y.shape)
-        return X, y, scaler
-    except Exception as e:
-        logger.error("Erreur lors de la préparation des données : %s", e)
-        raise
-
-def build_model():
-    """Construire le modèle LSTM."""
-    try:
-        logger.debug("Construction du modèle LSTM avec SEQ_LENGTH=%s, FEATURES=%s", SEQ_LENGTH, len(FEATURES))
-        model = Sequential([
-            LSTM(50, activation='relu', input_shape=(SEQ_LENGTH, len(FEATURES)), return_sequences=True),
-            LSTM(50, activation='relu'),
-            Dense(PREDICTION_DAYS * len(FEATURES)),
-            tf.keras.layers.Reshape((PREDICTION_DAYS, len(FEATURES)))
-        ])
-        model.compile(optimizer='adam', loss='mse')
-        logger.debug("Modèle LSTM construit avec succès")
-        return model
-    except Exception as e:
-        logger.error("Erreur lors de la construction du modèle : %s", e)
-        raise
-
-def train_and_save():
-    """Entraîner et sauvegarder le modèle LSTM."""
-    try:
-        logger.debug("Démarrage de l'entraînement et sauvegarde du modèle")
-        df = load_data_from_influx()
-        X, y, scaler = prepare_data(df)
-        
-        model = build_model()
-        history = model.fit(X, y, epochs=10, batch_size=32, validation_split=0.2, verbose=0)
-        
-        os.makedirs(os.path.dirname(MODEL_PATH), exist_ok=True)
-        model.save(MODEL_PATH)
-        with open(SCALER_PATH, 'wb') as f:
-            pickle.dump(scaler, f)
-        
-        global MODEL, SCALER
-        MODEL = model
-        SCALER = scaler
-        
-        logger.debug("Modèle et scaler sauvegardés à %s et %s", MODEL_PATH, SCALER_PATH)
-        return model, scaler, history, X, y
-    except Exception as e:
-        logger.error("Erreur lors de l'entraînement et sauvegarde : %s", e)
-        raise
-
 def load_model():
     """Charger le modèle et le scaler."""
     try:
         logger.debug("Chargement du modèle depuis %s", MODEL_PATH)
-        model = load_model(MODEL_PATH)
+        model = keras_load_model(MODEL_PATH)
         with open(SCALER_PATH, 'rb') as f:
             scaler = pickle.load(f)
         logger.debug("Modèle et scaler chargés avec succès")
@@ -139,55 +42,3 @@ def load_model():
     except Exception as e:
         logger.error("Erreur lors du chargement du modèle ou scaler : %s", e)
         raise
-
-def connect_postgresql():
-    """Connexion à PostgreSQL."""
-    try:
-        import psycopg2
-        logger.debug("Connexion à PostgreSQL : host=%s, dbname=%s", os.getenv("PG_HOST", "localhost"), os.getenv("PG_DBNAME", "energy_db"))
-        conn = psycopg2.connect(
-            dbname=os.getenv("PG_DBNAME", "energy_db"),
-            user=os.getenv("PG_USER", "user"),
-            password=os.getenv("PG_PASSWORD", "password"),
-            host=os.getenv("PG_HOST", "localhost"),
-            port=os.getenv("PG_PORT", "5432")
-        )
-        logger.debug("Connexion PostgreSQL établie")
-        return conn
-    except Exception as e:
-        logger.error("Erreur lors de la connexion à PostgreSQL : %s", e)
-        raise
-
-def save_predictions_to_db(predictions):
-    """Sauvegarder les prédictions dans PostgreSQL."""
-    try:
-        logger.debug("Sauvegarde des prédictions dans PostgreSQL")
-        conn = connect_postgresql()
-        cursor = conn.cursor()
-        for pred in predictions:
-            cursor.execute(
-                """
-                INSERT INTO predictions (
-                    energyproduced, temperature, humidity, month, week_of_year, hour
-                ) VALUES (%s, %s, %s, %s, %s, %s)
-                """,
-                (
-                    pred['energyproduced'], pred['temperature'], pred['humidity'],
-                    pred['month'], pred['week_of_year'], pred['hour']
-                )
-            )
-        conn.commit()
-        logger.debug("Prédictions sauvegardées avec succès")
-        cursor.close()
-        conn.close()
-    except Exception as e:
-        logger.error("Erreur lors de la sauvegarde des prédictions : %s", e)
-        raise
-
-if __name__ == "__main__":
-    # Exécuter l'entraînement uniquement si le script est appelé directement
-    try:
-        model, scaler, history, X, y = train_and_save()
-        print("Entraînement terminé.")
-    except Exception as e:
-        logger.error("Erreur lors de l'exécution principale : %s", e)
