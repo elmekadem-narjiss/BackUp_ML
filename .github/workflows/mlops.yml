@@ -210,6 +210,61 @@ jobs:
           echo "✅ Fin de l'exécution, vérification via Grafana et Prometheus"
         shell: bash
 
+  The error occurs in the integration-test job during the model.predict step of the PPO model. The traceback indicates a ValueError: Error: Unexpected observation shape () for Box environment, please use (3,) or (n_env, 3) for the observation shape. This suggests that the observation returned by env.reset()[0] from BESSBatteryEnv has an incorrect shape, which does not match the expected observation space of the environment (a Box with shape (3,)).
+
+Additionally, there are warnings:
+
+A warning about using an OpenAI Gym environment, recommending a transition to Gymnasium. This is informational and not the cause of the error, as shimmy is already installed to handle compatibility.
+A warning about the PPO mini-batch size (batch_size=64) not being a factor of the rollout buffer size (n_steps * n_envs = 2). This can be optimized but is not the primary issue.
+Root Cause
+The BESSBatteryEnv environment’s reset method returns an observation with an empty shape (()) or an incompatible format, but the environment’s observation_space is defined as a Box expecting a shape of (3,).
+This mismatch causes stable-baselines3 to fail when processing the observation in model.predict.
+The issue likely stems from how BESSBatteryEnv processes the input CSV (test_lstm_predictions.csv) or defines its observation space.
+Analyzing the Problem
+Observation Shape: The error indicates that BESSBatteryEnv expects observations to be a 1D array of length 3 (shape (3,)), likely corresponding to features derived from the CSV columns (energyproduced, predicted_demand, demand).
+CSV Content: The test CSV created in the workflow has three columns: energyproduced, predicted_demand, and demand. However, BESSBatteryEnv may not be extracting these correctly or may be returning a scalar or empty observation.
+Environment Implementation: Without the source code of BESSBatteryEnv.py, we can’t confirm the exact issue, but it’s likely that:
+The reset method returns an incorrect observation (e.g., a scalar or empty value).
+The observation_space is defined as Box(shape=(3,)), but the actual observation doesn’t match.
+Fixing the Issue
+To resolve this, we need to ensure that BESSBatteryEnv returns an observation with the correct shape (3,). Since we can’t modify BESSBatteryEnv.py (it’s downloaded from a repository), we can:
+
+Verify the CSV Format: Ensure the CSV has the exact columns and format expected by BESSBatteryEnv.
+Debug the Observation: Add debugging to inspect the observation returned by env.reset() and the observation_space.
+Adjust the Test: If the issue is specific to the test setup, we can modify the test to align with BESSBatteryEnv’s expectations.
+Fix PPO Configuration: Address the mini-batch size warning by setting batch_size to a factor of n_steps * n_envs (e.g., 2).
+Given the error, the most likely issue is with the observation shape. Let’s modify the integration test to:
+
+Print the observation and observation_space for debugging.
+Set batch_size=2 to resolve the mini-batch warning and avoid truncated batches.
+Keep the CSV as is, assuming it matches the expected format.
+Updated Workflow
+Below is the corrected integration-test job. The build job remains unchanged, so I’ll only show the integration-test job:
+
+yaml
+
+Copier
+name: MLFlow and Snakemake Workflow
+
+on:
+  schedule:
+    - cron: '0 8 * * *'  # Run daily at 8:00 UTC
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+env:
+  MLFLOW_URL: https://80f3-105-155-14-70.ngrok-free.app/
+  PUSHGATEWAY_URL: https://c8f3-105-155-14-70.ngrok-free.app
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      # [Previous build job steps remain unchanged, as shown in prior responses]
+      # ...
+
   integration-test:
     runs-on: ubuntu-latest
     steps:
@@ -250,12 +305,15 @@ jobs:
           source venv/bin/activate
           export PYTHONPATH=$PYTHONPATH:$GITHUB_WORKSPACE
           python -c "
+          import numpy as np
           from stable_baselines3 import PPO
           from BESSBatteryEnv import BESSBatteryEnv
           env = BESSBatteryEnv('test_lstm_predictions.csv')
-          model = PPO('MlpPolicy', env, n_steps=2, verbose=0)
+          print('Observation space:', env.observation_space)
+          obs, info = env.reset()
+          print('Observation from reset:', obs, 'Shape:', np.shape(obs))
+          model = PPO('MlpPolicy', env, n_steps=2, batch_size=2, verbose=0)
           model.learn(total_timesteps=4)
-          obs = env.reset()[0]
           action, _ = model.predict(obs)
           print('Integration test passed: Model trained and predicted action:', action)
           "
