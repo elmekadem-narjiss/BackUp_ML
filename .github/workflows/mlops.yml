@@ -27,7 +27,7 @@ jobs:
           python -m venv venv
           source venv/bin/activate
           pip install --upgrade pip
-          pip install mlflow prometheus_client jq snakemake pulp==2.4 pulp[cbc] stable-baselines3 gym pandas numpy matplotlib shimmy jupyter nbconvert papermill google-auth google-auth-oauthlib google-api-python-client ipykernel
+          pip install mlflow prometheus_client jq snakemake pulp==2.4 pulp[cbc] stable-baselines3 gym pandas numpy matplotlib shimmy jupyter nbconvert papermill google-auth google-auth-oauthlib google-api-python-client ipykernel pytest pytest-asyncio pytest-mock respx fastapi uvicorn tensorflow scikit-learn redis psycopg2-binary influxdb-client paho-mqtt statsmodels sqlalchemy httpx
           pip list | grep ipykernel || { echo "Erreur : ipykernel non installé"; exit 1; }
           pip list | grep google-api-python-client || { echo "Erreur : google-api-python-client non installé"; exit 1; }
         shell: bash
@@ -218,10 +218,12 @@ jobs:
         uses: actions/setup-python@v4
         with:
           python-version: '3.9'
-      - name: Install dependencies
+      - name: Set up virtual environment and install dependencies
         run: |
-          python -m pip install --upgrade pip
-          pip install pytest pytest-asyncio respx numpy pandas stable-baselines3 gym fastapi uvicorn tensorflow scikit-learn redis psycopg2-binary influxdb-client paho-mqtt statsmodels sqlalchemy shimmy httpx
+          python -m venv venv
+          source venv/bin/activate
+          pip install --upgrade pip
+          pip install pytest pytest-asyncio pytest-mock respx numpy pandas stable-baselines3 gym fastapi uvicorn tensorflow scikit-learn redis psycopg2-binary influxdb-client paho-mqtt statsmodels sqlalchemy shimmy httpx
         shell: bash
       - name: Create test CSV for BESSBatteryEnv
         run: |
@@ -232,19 +234,40 @@ jobs:
               'predicted_demand': [250, 350, 450],
               'demand': [240, 340, 440]
           })
-          data.to_csv('Backend/tests/test_lstm_predictions.csv', index=False)
+          data.to_csv('tests/test_lstm_predictions.csv', index=False)
           "
-          ls -l Backend/tests/test_lstm_predictions.csv
+          ls -l tests/test_lstm_predictions.csv
         shell: bash
+        working-directory: ./Backend
+      - name: Verify test CSV columns
+        run: |
+          python -c "
+          import pandas as pd
+          df = pd.read_csv('tests/test_lstm_predictions.csv')
+          expected_columns = ['energyproduced', 'predicted_demand', 'demand']
+          assert all(col in df.columns for col in expected_columns), f'CSV missing expected columns: {expected_columns}, found: {list(df.columns)}'
+          print('Test CSV columns verified:', list(df.columns))
+          "
+        shell: bash
+        working-directory: ./Backend
       - name: Set up test environment
         run: |
-          export PYTHONPATH=$PYTHONPATH:$GITHUB_WORKSPACE
-          export INFLUX_URL=http://localhost:8086
-          export INFLUX_TOKEN=dummy_token
-          export INFLUX_ORG=dummy_org
-          export INFLUX_BUCKET=dummy_bucket
+          source venv/bin/activate
+          export PYTHONPATH=$PYTHONPATH:$GITHUB_WORKSPACE/Backend
+          unset INFLUX_URL INFLUX_TOKEN INFLUX_ORG INFLUX_BUCKET
         shell: bash
       - name: Run tests
         run: |
-          pytest Backend/tests/ --verbose
+          source venv/bin/activate
+          pytest tests/ --verbose --log-file=pytest.log
         shell: bash
+        working-directory: ./Backend
+      - name: Upload test logs
+        if: failure()
+        uses: actions/upload-artifact@v3
+        with:
+          name: test-logs
+          path: |
+            tests/*.log
+            pytest.log
+        working-directory: ./Backend
