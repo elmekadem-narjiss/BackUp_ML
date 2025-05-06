@@ -18,7 +18,7 @@ def mock_influx_data():
         'predicted_demand': [250, 350, 450],
         'demand': [240, 340, 440]
     }, index=pd.to_datetime(['2023-01-01 00:00:00', '2023-01-01 01:00:00', '2023-01-01 02:00:00']))
-    with patch("app.utils.time_series.influxdb_client.InfluxDBClient", autospec=True) as mock_client:
+    with patch("app.services.lstm_model.InfluxDBClient", autospec=True) as mock_client:
         mock_instance = mock_client.return_value
         mock_query_api = mock_instance.query_api.return_value
         mock_query_api.query_data_frame.return_value = mock_df
