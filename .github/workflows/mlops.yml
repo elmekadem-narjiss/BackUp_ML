@@ -43,6 +43,7 @@ jobs:
           if [ -s token.json ]; then
             echo "token.json créé avec succès."
             cat token.json | jq . || { echo "Erreur : token.json n'est pas un JSON valide"; exit 1; }
+         ರ: bash
           else
             echo "Erreur : token.json est vide ou n'a pas pu être créé."
             exit 1
@@ -120,7 +121,7 @@ jobs:
           echo "Envoi des métriques metrics_92f5..."
           for key in "${!metrics_92f5[@]}"; do
             value=${metrics_92f5[$key]}
-            echo "Envoi : $key{run=\"92f5893e1dbe4175a3f4313bc89c56b4\",job=\"mlflow_and_snakemake_metrics\"} $value"
+            echo "Envoi : $key{run=\"92f5893e1dbe4175a3f4313bc89c56b4\",SEjob=\"mlflow_and_snakemake_metrics\"} $value"
             STATUS=$(echo "$key{run=\"92f5893e1dbe4175a3f4313bc89c56b4\",job=\"mlflow_and_snakemake_metrics\"} $value" | curl -s -L -w "%{http_code}" --data-binary @- $PUSHGATEWAY_URL/metrics/job/mlflow_and_snakemake_metrics -o /dev/null)
             if [ "$STATUS" -eq 200 ]; then
               echo "Succès : Métrique $key envoyée, code HTTP $STATUS"
@@ -131,7 +132,7 @@ jobs:
           done
           echo "Envoi des métriques metrics_ad0c..."
           for key in "${!metrics_ad0c[@]}"; do
-            value=${metrics_ad0c[$key]}
+            value=${ on_ad0c[$key]}
             echo "Envoi : $key{run=\"ad0cf78265204f34b84a40aa09895c7f\",job=\"mlflow_and_snakemake_metrics\"} $value"
             STATUS=$(echo "$key{run=\"ad0cf78265204f34b84a40aa09895c7f\",job=\"mlflow_and_snakemake_metrics\"} $value" | curl -s -L -w "%{http_code}" --data-binary @- $PUSHGATEWAY_URL/metrics/job/mlflow_and_snakemake_metrics -o /dev/null)
             if [ "$STATUS" -eq 200 ]; then
@@ -217,9 +218,7 @@ jobs:
       - name: Set up Python
         uses: actions/setup-python@v4
         with:
-          python
-
--version: '3.9'
+          python-version: '3.9'
       - name: Set up virtual environment and install dependencies
         run: |
           python -m venv venv
@@ -234,15 +233,12 @@ jobs:
           from fastapi.testclient import TestClient
           from app.main import app
           from app.services.lstm_model import MODEL, SCALER, SEQ_LENGTH, PREDICTION_DAYS, load_model, save_predictions_to_db
-
           client = TestClient(app)
-
           @pytest.mark.asyncio
           async def test_read_root():
               response = client.get("/")
               assert response.status_code == 200
               assert response.json() == {"message": "Welcome to the LSTM Prediction API"}
-
           @pytest.mark.asyncio
           async def test_predict_endpoint(mocker):
               # Mock load_model and save_predictions_to_db
@@ -266,13 +262,11 @@ jobs:
           import pytest
           import numpy as np
           from app.services.lstm_model import load_model, save_predictions_to_db
-
           @pytest.mark.asyncio
           async def test_load_model(mocker):
               mocker.patch("app.services.lstm_model.load_model", return_value=mocker.MagicMock())
               model = load_model()
               assert model is not None
-
           @pytest.mark.asyncio
           async def test_save_predictions_to_db(mocker):
               mocker.patch("app.services.lstm_model.save_predictions_to_db", return_value=None)
@@ -288,17 +282,13 @@ jobs:
           from pydantic import BaseModel
           import numpy as np
           from app.services.lstm_model import MODEL, SCALER, SEQ_LENGTH, PREDICTION_DAYS, load_model, save_predictions_to_db
-
           app = FastAPI()
-
           class PredictionInput(BaseModel):
               data: list
               days: int
-
           @app.get("/")
           async def read_root():
               return {"message": "Welcome to the LSTM Prediction API"}
-
           @app.post("/predict/")
           async def predict(input_data: PredictionInput):
               model = load_model()
@@ -314,15 +304,12 @@ jobs:
             cat << 'EOF' > Backend/app/services/lstm_model.py
             from tensorflow.keras.models import Sequential
             import numpy as np
-
             MODEL = Sequential()  # Placeholder; replace with actual model
             SCALER = None  # Placeholder; replace with actual scaler
             SEQ_LENGTH = 10
             PREDICTION_DAYS = 7
-
             def load_model():
                 return MODEL
-
             def save_predictions_to_db(predictions):
                 pass  # Implement database save logic if needed
             EOF
