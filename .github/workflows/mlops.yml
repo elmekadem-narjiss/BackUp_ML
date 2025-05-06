@@ -223,7 +223,7 @@ jobs:
           python -m venv venv
           source venv/bin/activate
           pip install --upgrade pip
-          pip install pytest pytest-asyncio fastapi uvicorn httpx numpy tensorflow
+          pip install pytest pytest-asyncio fastapi uvicorn httpx numpy pandas tensorflow
         shell: bash
       - name: Create integration test file
         run: |
@@ -285,13 +285,6 @@ print('Test CSV columns verified:', list(df.columns))
           source $GITHUB_WORKSPACE/venv/bin/activate
           export PYTHONPATH=$PYTHONPATH:$GITHUB_WORKSPACE/Backend
           unset INFLUX_URL INFLUX_TOKEN INFLUX_ORG INFLUX_BUCKET
-        shell: bash
-      - name: Run FastAPI app in background
-        run: |
-          source $GITHUB_WORKSPACE/venv/bin/activate
-          cd Backend
-          uvicorn app.main:app --host 0.0.0.0 --port 8000 &
-          sleep 5  # Wait for the server to start
         shell: bash
       - name: Run integration tests
         run: |
