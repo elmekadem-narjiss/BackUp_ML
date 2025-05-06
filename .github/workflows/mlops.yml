@@ -299,7 +299,7 @@ jobs:
           source venv/bin/activate
           black --check .
           flake8 . --max-line-length=88 --extend-ignore=E203
-        shell> bash
+        shell: bash
 
       - name: Download BESSBatteryEnv script
         run: |
