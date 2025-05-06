@@ -16,6 +16,7 @@ jobs:
   build:
     runs-on: ubuntu-latest
     steps:
+      # [Previous build job steps remain unchanged]
       - name: Checkout code
         uses: actions/checkout@v3
       - name: Set up Python
@@ -224,6 +225,11 @@ jobs:
           source venv/bin/activate
           pip install --upgrade pip
           pip install pytest pytest-asyncio pytest-mock pandas numpy stable-baselines3 gym
+        shell: bash
+      - name: Download BESSBatteryEnv script
+        run: |
+          wget https://raw.githubusercontent.com/elmekadem-narjiss/BackUp_ML/refs/heads/main/Backend/BESSBatteryEnv.py -O BESSBatteryEnv.py
+          ls -l BESSBatteryEnv.py
         shell: bash
       - name: Create test CSV for integration test
         run: |
