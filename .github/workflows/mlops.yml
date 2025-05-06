@@ -9,7 +9,7 @@ on:
     branches: [main]
 
 env:
-  MLFLOW_URL: https://80f3-105-155-14- smartest.app/
+  MLFLOW_URL: https://80f3-105-155-14-70.ngrok-free.app/
   PUSHGATEWAY_URL: https://c8f3-105-155-14-70.ngrok-free.app
 
 jobs:
@@ -39,7 +39,7 @@ jobs:
         shell: bash
       - name: Save Google Drive token
         run: |
-          echo '{"token": "ya29.a0AZYkNZigxH1DhQugv99ZweJfyZdWkklt1F9Ntn6JM5XFhf0q9Km2kecSEgHEgo1zNgKoRWJOUCkGjuGk96SHJKfTIEOMKEYWvzA1Ko3jTx1PR7i_SHwU8wgq-gZ29dwemUnKwgw2jxU0hp9U8jbFI9ZG6bAI9_3WHQ8VMt0xaCgYKAUQSARISFQHGX2Mi1HZSkTbbdf6FiXHFeKU_eA0175", "refresh_token": "1//09sy1DZcnY3jZCgYIARAAGAkSNwF-L9IrW4JaBOZSELGp4ClKWKCcDHRF0kD-Qpw2hOzkXtW-54-pNI29lU0rMPPI63IfdPtxYaE", "token_uri": "https://oauth2.googleapis.com/token", "client_id": "27688368522-s8f6r2og4ikhm9ngnnkgnvtkq01ทำ4u.apps.googleusercontent.com", "client_secret": "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", "scopes": ["https://www.googleapis.com/auth/drive"], "universe_domain": "googleapis.com", "account": "", "expiry": "2025-05-03T23:38:04.625991Z"}' | jq '.' > token.json
+          echo '{"token": "ya29.a0AZYkNZigxH1DhQugv99ZweJfyZdWkklt1F9Ntn6JM5XFhf0q9Km2kecSEgHEgo1zNgKoRWJOUCkGjuGk96SHJKfTIEOMKEYWvzA1Ko3jTx1PR7i_SHwU8wgq-gZ29dwemUnKwgw2jxU0hp9U8jbFI9ZG6bAI9_3WHQ8VMt0xaCgYKAUQSARISFQHGX2Mi1HZSkTbbdf6FiXHFeKU_eA0175", "refresh_token": "1//09sy1DZcnY3jZCgYIARAAGAkSNwF-L9IrW4JaBOZSELGp4ClKWKCcDHRF0kD-Qpw2hOzkXtW-54-pNI29lU0rMPPI63IfdPtxYaE", "token_uri": "https://oauth2.googleapis.com/token", "client_id": "27688368522-s8f6r2og4ikhm9ngnnkgnvtkq01ahu4u.apps.googleusercontent.com", "client_secret": "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", "scopes": ["https://www.googleapis.com/auth/drive"], "universe_domain": "googleapis.com", "account": "", "expiry": "2025-05-03T23:38:04.625991Z"}' | jq '.' > token.json
           if [ -s token.json ]; then
             echo "token.json créé avec succès."
             cat token.json | jq . || { echo "Erreur : token.json n'est pas un JSON valide"; exit 1; }
@@ -223,127 +223,21 @@ jobs:
           python -m venv venv
           source venv/bin/activate
           pip install --upgrade pip
-          pip install pytest pytest-asyncio pytest-mock respx numpy pandas stable-baselines3 gym fastapi uvicorn tensorflow scikit-learn redis psycopg2-binary influxdb-client pahu-mqtt statsmodels sqlalchemy shimmy httpx
-        shell: bash
-      - name: Update test_main.py
-        run: |
-          cat << 'EOF' > Backend/tests/test_main.py
-import pytest
-from fastapi.testclient import TestClient
-from app.main import app
-from app.services.lstm_model import MODEL, SCALER, SEQ_LENGTH, PREDICTION_DAYS, load_model, save_predictions_to_db
-
-client = TestClient(app)
-
-@pytest.mark.asyncio
-async def test_read_root():
-    response = client.get("/")
-    assert response.status_code == 200
-    assert response.json() == {"message": "Welcome to the LSTM Prediction API"}
-
-@pytest.mark.asyncio
-async def test_predict_endpoint(mocker):
-    # Mock load_model and save_predictions_to_db
-    mocker.patch("app.services.lstm_model.load_model", return_value=MODEL)
-    mocker.patch("app.services.lstm_model.save_predictions_to_db", return_value=None)
-    
-    # Sample input data
-    input_data = {
-        "data": [[100, 200, 300]] * SEQ_LENGTH,
-        "days": PREDICTION_DAYS
-    }
-    
-    response = client.post("/predict/", json=input_data)
-    assert response.status_code == 200
-    assert "predictions" in response.json()
-EOF
-        shell: bash
-      - name: Update test_model_lstm.py
-        run: |
-          cat << 'EOF' > Backend/tests/test_model_lstm.py
-import pytest
-import numpy as np
-from app.services.lstm_model import load_model, save_predictions_to_db
-
-@pytest.mark.asyncio
-async def test_load_model(mocker):
-    mocker.patch("app.services.lstm_model.load_model", return_value=mocker.MagicMock())
-    model = load_model()
-    assert model is not None
-
-@pytest.mark.asyncio
-async def test_save_predictions_to_db(mocker):
-    mocker.patch("app.services.lstm_model.save_predictions_to_db", return_value=None)
-    predictions = np.array([1.0, 2.0, 3.0])
-    save_predictions_to_db(predictions)
-    assert True  # If no exception, test passes
-EOF
-        shell: bash
-      - name: Update app/main.py
-        run: |
-          cat << 'EOF' > Backend/app/main.py
-from fastapi import FastAPI
-from pydantic import BaseModel
-import numpy as np
-from app.services.lstm_model import MODEL, SCALER, SEQ_LENGTH, PREDICTION_DAYS, load_model, save_predictions_to_db
-
-app = FastAPI()
-
-class PredictionInput(BaseModel):
-    data: list
-    days: int
-
-@app.get("/")
-async def read_root():
-    return {"message": "Welcome to the LSTM Prediction API"}
-
-@app.post("/predict/")
-async def predict(input_data: PredictionInput):
-    model = load_model()
-    data = np.array(input_data.data)
-    predictions = model.predict(data)  # Simplified; adjust based on actual model
-    save_predictions_to_db(predictions)
-    return {"predictions": predictions.tolist()}
-EOF
-        shell: bash
-      - name: Ensure lstm_model.py exists
-        run: |
-          if [ ! -f Backend/app/services/lstm_model.py ]; then
-            mkdir -p Backend/app/services
-            cat << 'EOF' > Backend/app/services/lstm_model.py
-from tensorflow.keras.models import Sequential
-import numpy as np
-
-MODEL = Sequential()  # Placeholder; replace with actual model
-SCALER = None  # Placeholder; replace with actual scaler
-SEQ_LENGTH = 10
-PREDICTION_DAYS = 7
-
-def load_model():
-    return MODEL
-
-def save_predictions_to_db(predictions):
-    pass  # Implement database save logic if needed
-EOF
-            echo "Created Backend/app/services/lstm_model.py"
-            cat Backend/app/services/lstm_model.py
-          else
-            echo "Backend/app/services/lstm_model.py already exists"
-          fi
+          pip install pytest pytest-asyncio pytest-mock respx numpy pandas stable-baselines3 gym fastapi uvicorn tensorflow scikit-learn redis psycopg2-binary influxdb-client paho-mqtt statsmodels sqlalchemy shimmy httpx
         shell: bash
       - name: Create test CSV for BESSBatteryEnv
         run: |
           source $GITHUB_WORKSPACE/venv/bin/activate
           cd Backend
           python -c "
-import pandas as pd
-data = pd.DataFrame({
-    'energyproduced': [100, 200, 300],
-    'predicted_demand': [250, 350, 450],
-    'demand': [240, 340, 440]
-})
-data.to_csv('tests/test_lstm_predictions.csv', index=False)
-"
+          import pandas as pd
+          data = pd.DataFrame({
+              'energyproduced': [100, 200, 300],
+              'predicted_demand': [250, 350, 450],
+              'demand': [240, 340, 440]
+          })
+          data.to_csv('tests/test_lstm_predictions.csv', index=False)
+          "
           ls -l tests/test_lstm_predictions.csv
         shell: bash
       - name: Verify test CSV columns
@@ -351,12 +245,12 @@ data.to_csv('tests/test_lstm_predictions.csv', index=False)
           source $GITHUB_WORKSPACE/venv/bin/activate
           cd Backend
           python -c "
-import pandas as pd
-df = pd.read_csv('tests/test_lstm_predictions.csv')
-expected_columns = ['energyproduced', 'predicted_demand', 'demand']
-assert all(col in df.columns for col in expected_columns), f'CSV missing expected columns: {expected_columns}, found: {list(df.columns)}'
-print('Test CSV columns verified:', list(df.columns))
-"
+          import pandas as pd
+          df = pd.read_csv('tests/test_lstm_predictions.csv')
+          expected_columns = ['energyproduced', 'predicted_demand', 'demand']
+          assert all(col in df.columns for col in expected_columns), f'CSV missing expected columns: {expected_columns}, found: {list(df.columns)}'
+          print('Test CSV columns verified:', list(df.columns))
+          "
         shell: bash
       - name: Set up test environment
         run: |
