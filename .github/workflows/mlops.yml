@@ -121,7 +121,7 @@ jobs:
           for key in "${!metrics_92f5[@]}"; do
             value=${metrics_92f5[$key]}
             echo "Envoi : $key{run=\"92f5893e1dbe4175a3f4313bc89c56b4\",job=\"mlflow_and_snakemake_metrics\"} $value"
-            STATUS=$(echo "$key{run=\"92f5893e1dbe4175a3f4313bc89c56b4\", occjob=\"mlflow_and_snakemake_metrics\"} $value" | curl -s -L -w "%{http_code}" --data-binary @- $PUSHGATEWAY_URL/metrics/job/mlflow_and_snakemake_metrics -o /dev/null)
+            STATUS=$(echo "$key{run=\"92f5893e1dbe4175a3f4313bc89c56b4\",job=\"mlflow_and_snakemake_metrics\"} $value" | curl -s -L -w "%{http_code}" --data-binary @- $PUSHGATEWAY_URL/metrics/job/mlflow_and_snakemake_metrics -o /dev/null)
             if [ "$STATUS" -eq 200 ]; then
               echo "Succès : Métrique $key envoyée, code HTTP $STATUS"
             else
@@ -223,117 +223,46 @@ jobs:
           python -m venv venv
           source venv/bin/activate
           pip install --upgrade pip
-          pip install numpy pandas fastapi uvicorn tensorflow scikit-learn httpx
+          pip install pytest pytest-asyncio pytest-mock respx numpy pandas stable-baselines3 gym fastapi uvicorn tensorflow scikit-learn redis psycopg2-binary influxdb-client paho-mqtt statsmodels sqlalchemy shimmy httpx
         shell: bash
       - name: Create test CSV for BESSBatteryEnv
         run: |
-          source $GITHUB_WORKSPACE/venv/bin/activate
-          mkdir -p Backend/tests
           cd Backend
-          cat << 'EOF' > create_test_csv.py
-import pandas as pd
-data = pd.DataFrame({'energyproduced': [100, 200, 300], 'predicted_demand': [250, 350, 450], 'demand': [240, 340, 440]})
-data.to_csv('tests/test_lstm_predictions.csv', index=False)
-EOF
-          python create_test_csv.py
-          if [ -f tests/test_lstm_predictions.csv ]; then
-            echo "Test CSV created successfully."
-            ls -l tests/test_lstm_predictions.csv
-          else
-            echo "Error: Test CSV was not created."
-            exit 1
-          fi
+          source venv/bin/activate
+          python -c "
+          import pandas as pd
+          data = pd.DataFrame({
+              'energyproduced': [100, 200, 300],
+              'predicted_demand': [250, 350, 450],
+              'demand': [240, 340, 440]
+          })
+          data.to_csv('tests/test_lstm_predictions.csv', index=False)
+          "
+          ls -l tests/test_lstm_predictions.csv
         shell: bash
       - name: Verify test CSV columns
         run: |
-          source $GITHUB_WORKSPACE/venv/bin/activate
           cd Backend
-          cat << 'EOF' > verify_csv.py
-import pandas as pd
-df = pd.read_csv('tests/test_lstm_predictions.csv')
-expected_columns = ['energyproduced', 'predicted_demand', 'demand']
-assert all(col in df.columns for col in expected_columns), f'CSV missing expected columns: {expected_columns}, found: {list(df.columns)}'
-print('Test CSV columns verified:', list(df.columns))
-EOF
-          python verify_csv.py
+          source venv/bin/activate
+          python -c "
+          import pandas as pd
+          df = pd.read_csv('tests/test_lstm_predictions.csv')
+          expected_columns = ['energyproduced', 'predicted_demand', 'demand']
+          assert all(col in df.columns for col in expected_columns), f'CSV missing expected columns: {expected_columns}, found: {list(df.columns)}'
+          print('Test CSV columns verified:', list(df.columns))
+          "
         shell: bash
-      - name: Set up FastAPI application
+      - name: Set up test environment
         run: |
-          source $GITHUB_WORKSPACE/venv/bin/activate
-          mkdir -p Backend/app/services
-          cat << 'EOF' > Backend/app/main.py
-from fastapi import FastAPI
-from pydantic import BaseModel
-import numpy as np
-from tensorflow.keras.models import Sequential
-
-app = FastAPI()
-
-class PredictionInput(BaseModel):
-    data: list
-    days: int
-
-MODEL = Sequential()  # Placeholder model
-SEQ_LENGTH = 10
-PREDICTION_DAYS = 7
-
-def load_model():
-    return MODEL
-
-def save_predictions_to_db(predictions):
-    pass  # Placeholder for DB save
-
-@app.get("/")
-async def read_root():
-    return {"message": "Welcome to the LSTM Prediction API"}
-
-@app.post("/predict/")
-async def predict(input_data: PredictionInput):
-    model = load_model()
-    data = np.array(input_data.data)
-    predictions = np.array([1.0, 2.0, 3.0])  # Mock prediction
-    save_predictions_to_db(predictions)
-    return {"predictions": predictions.tolist()}
-EOF
-          cat << 'EOF' > Backend/app/services/lstm_model.py
-from tensorflow.keras.models import Sequential
-import numpy as np
-
-MODEL = Sequential()  # Placeholder
-SCALER = None
-SEQ_LENGTH = 10
-PREDICTION_DAYS = 7
-
-def load_model():
-    return MODEL
-
-def save_predictions_to_db(predictions):
-    pass
-EOF
+          source venv/bin/activate
+          export PYTHONPATH=$PYTHONPATH:$GITHUB_WORKSPACE/Backend
+          unset INFLUX_URL INFLUX_TOKEN INFLUX_ORG INFLUX_BUCKET
         shell: bash
-      - name: Run integration test
+      - name: Run tests
         run: |
-          source $GITHUB_WORKSPACE/venv/bin/activate
           cd Backend
-          # Start FastAPI server in the background
-          uvicorn app.main:app --host 0.0.0.0 --port 8000 --log-level error > fastapi.log 2>&1 &
-          sleep 5  # Wait for server to start
-          # Test /predict/ endpoint
-          RESPONSE=$(curl -s -w "%{http_code}" -X POST http://localhost:8000/predict/ \
-            -H "Content-Type: application/json" \
-            -d '{"data": [[100, 200, 300], [100, 200, 300], [100, 200, 300], [100, 200, 300], [100, 200, 300], [100, 200, 300], [100, 200, 300], [100, 200, 300], [100, 200, 300], [100, 200, 300]], "days": 7}' \
-            -o response.json)
-          if [ "$RESPONSE" -eq 200 ]; then
-            echo "Integration test passed: /predict/ endpoint returned 200"
-            cat response.json
-            jq -e '.predictions' response.json > /dev/null || { echo "Error: Response does not contain 'predictions'"; exit 1; }
-          else
-            echo "Integration test failed: /predict/ endpoint returned HTTP $RESPONSE"
-            cat fastapi.log
-            exit 1
-          fi
-          # Stop the FastAPI server
-          pkill -f uvicorn
+          source venv/bin/activate
+          pytest tests/ --verbose --log-file=pytest.log
         shell: bash
       - name: Upload test logs
         if: failure()
@@ -341,5 +270,5 @@ EOF
         with:
           name: test-logs
           path: |
-            Backend/fastapi.log
-            Backend/response.json
+            Backend/tests/*.log
+            Backend/pytest.log
