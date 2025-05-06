@@ -10,7 +10,7 @@ from stable_baselines3 import PPO
 def sample_csv(tmp_path):
     """Crée un fichier CSV temporaire pour les tests."""
     data = pd.DataFrame({
-        'value': np.random.randn(100)
+        'energyproduced': np.random.randn(100) * 100  # Realistic values for energy
     })
     csv_path = tmp_path / "test_lstm_predictions.csv"
     data.to_csv(csv_path, index=False)
