@@ -7,7 +7,7 @@ from BESSBatteryEnv import BESSBatteryEnv
 def sample_csv(tmp_path):
     """Crée un fichier CSV temporaire pour les tests."""
     data = pd.DataFrame({
-        'value': np.random.randn(100)
+        'energyproduced': np.random.randn(100) * 100  # Realistic values for energy
     })
     csv_path = tmp_path / "test_lstm_predictions.csv"
     data.to_csv(csv_path, index=False)
@@ -29,7 +29,7 @@ def test_bess_battery_env(sample_csv):
     assert env.action_space.high == pytest.approx(1.0)
     
     # Vérifier l'espace d'observation
-    assert env.observation_space.shape == (1,)  # Une colonne 'value'
+    assert env.observation_space.shape == (1,)  # Une colonne 'energyproduced'
     
     # Tester une étape
     obs, reward, done, _ = env.step([0.5])
