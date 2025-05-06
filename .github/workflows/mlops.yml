@@ -60,14 +60,26 @@ jobs:
           echo "Kernel Jupyter installé avec succès."
         shell: bash
 
-      - name: Save Google Drive token
+      - name: Save Google Drive tokens
         run: |
-          echo "${{ secrets.GOOGLE_DRIVE_TOKEN }}" | jq '.' > token.json
+          cat << 'EOF' > token.json
+          {"token": "ya29.a0AZYkNZigxH1DhQugv99ZweJfyZdWkklt1F9Ntn6JM5XFhf0q9Km2kecSEgHEgo1zNgKoRWJOUCkGjuGk96SHJKfTIEOMKEYWvzA1Ko3jTx1PR7i_SHwU8wgq-gZ29dwemUnKwgw2jxU0hp9U8jbFI9ZG6bAI9_3WHQ8VMt0xaCgYKAUQSARISFQHGX2Mi1HZSkTbbdf6FiXHFeKU_eA0175", "refresh_token": "1//09sy1DZcnY3jZCgYIARAAGAkSNwF-L9IrW4JaBOZSELGp4ClKWKCcDHRF0kD-Qpw2hOzkXtW-54-pNI29lU0rMPPI63IfdPtxYaE", "token_uri": "https://oauth2.googleapis.com/token", "client_id": "27688368522-s8f6r2og4ikhm9ngnnkgnvtkq01ahu4u.apps.googleusercontent.com", "client_secret": "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", "scopes": ["https://www.googleapis.com/auth/drive"], "universe_domain": "googleapis.com", "account": "", "expiry": "2025-05-03T23:38:04.625991Z"}
+          EOF
+          cat << 'EOF' > client_secrets.json
+          {"installed":{"client_id":"27688368522-s8f6r2og4ikhm9ngnnkgnvtkq01ahu4u.apps.googleusercontent.com","project_id":"colabautomation-458721","auth_uri":"https://accounts.google.com/o/oauth2/auth","token_uri":"https://oauth2.googleapis.com/token","auth_provider_x509_cert_url":"https://www.googleapis.com/oauth2/v1/certs","client_secret":"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","redirect_uris":["http://localhost"]}}
+          EOF
+          cat token.json | jq . > /dev/null || { echo "Erreur : token.json n'est pas un JSON valide"; exit 1; }
+          cat client_secrets.json | jq . > /dev/null || { echo "Erreur : client_secrets.json n'est pas un JSON valide"; exit 1; }
           if [ -s token.json ]; then
-            echo "token.json créé avec succès."
-            cat token.json | jq . || { echo "Erreur : token.json n'est pas un JSON valide"; exit 1; }
+            echo "token.json créé avec succès (size: $(stat -c %s token.json) bytes)"
           else
-            echo "Erreur : token.json est vide ou n'a pas pu être créé."
+            echo "Erreur : token.json est vide ou n'a pas pu être créé"
+            exit 1
+          fi
+          if [ -s client_secrets.json ]; then
+            echo "client_secrets.json créé avec succès (size: $(stat -c %s client_secrets.json) bytes)"
+          else
+            echo "Erreur : client_secrets.json est vide ou n'a pas pu être créé"
             exit 1
           fi
         shell: bash
@@ -78,12 +90,13 @@ jobs:
           wget https://raw.githubusercontent.com/elmekadem-narjiss/BackUp_ML/refs/heads/main/Backend/train_ppo.py -O train_ppo.py
           wget https://raw.githubusercontent.com/elmekadem-narjiss/BackUp_ML/refs/heads/main/Backend/evaluate_ppo.py -O evaluate_ppo.py
           wget https://raw.githubusercontent.com/elmekadem-narjiss/BackUp_ML/refs/heads/main/Backend/BESSBatteryEnv.py -O BESSBatteryEnv.py
+          wget https://raw.githubusercontent.com/elmekadem-narjiss/BackUp_ML/refs/heads/main/Backend/download_file.py -O download_file.py
         shell: bash
 
       - name: Download LSTM predictions from Google Drive
         run: |
           source venv/bin/activate
-          python Backend/download_file.py || { echo "Échec de l'étape Download LSTM predictions from Google Drive"; exit 1; }
+          python download_file.py || { echo "Échec de l'étape Download LSTM predictions from Google Drive"; exit 1; }
           if [ -f lstm_predictions_charger.csv ]; then
             echo "Fichier lstm_predictions_charger.csv téléchargé avec succès."
             ls -l lstm_predictions_charger.csv
