@@ -221,10 +221,30 @@ jobs:
       - name: Install dependencies
         run: |
           python -m pip install --upgrade pip
-          pip install pytest pytest-asyncio respx numpy pandas stable-baselines3 gym fastapi uvicorn tensorflow httpx scikit-learn redis psycopg2-binary influxdb-client paho-mqtt statsmodels sqlalchemy shimmy
+          pip install pytest pytest-asyncio respx numpy pandas stable-baselines3 gym fastapi uvicorn tensorflow scikit-learn redis psycopg2-binary influxdb-client paho-mqtt statsmodels sqlalchemy shimmy httpx
+        shell: bash
+      - name: Create test CSV for BESSBatteryEnv
+        run: |
+          python -c "
+          import pandas as pd
+          data = pd.DataFrame({
+              'energyproduced': [100, 200, 300],
+              'predicted_demand': [250, 350, 450],
+              'demand': [240, 340, 440]
+          })
+          data.to_csv('Backend/tests/test_lstm_predictions.csv', index=False)
+          "
+          ls -l Backend/tests/test_lstm_predictions.csv
+        shell: bash
+      - name: Set up test environment
+        run: |
+          export PYTHONPATH=$PYTHONPATH:$GITHUB_WORKSPACE
+          export INFLUX_URL=http://localhost:8086
+          export INFLUX_TOKEN=dummy_token
+          export INFLUX_ORG=dummy_org
+          export INFLUX_BUCKET=dummy_bucket
         shell: bash
       - name: Run tests
         run: |
-          export PYTHONPATH=$PYTHONPATH:$GITHUB_WORKSPACE
           pytest Backend/tests/ --verbose
         shell: bash
