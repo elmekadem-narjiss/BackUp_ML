@@ -16,7 +16,7 @@ def mock_influx_data():
         "humidity": [50, 55, 60],
         "predicted_demand": [150, 250, 350],
         "demand": [140, 240, 340]
-    }, index=pd.date_range(start="2023-01-01", periods=3, freq="H"))
+    }, index=pd.date_range(start="2023-01-01", periods=3, freq="h"))
     
     # Mocker InfluxDBClient pour empêcher les connexions réelles
     with patch("influxdb_client.InfluxDBClient", autospec=True) as mock_client:
