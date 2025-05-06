@@ -1,7 +1,7 @@
 import pytest
 import pytest_asyncio
 import pandas as pd
-from unittest.mock import patch
+from unittest.mock import patch, MagicMock
 from fastapi.testclient import TestClient
 from app.main import app
 
@@ -16,9 +16,14 @@ def mock_influx_data():
         "predicted_demand": [150, 250, 350],
         "demand": [140, 240, 340]
     })
-    with patch("app.services.lstm_model.load_data_from_influx", return_value=mock_df):
-        with patch("app.utils.time_series.load_energy_consumption_data", return_value=mock_df):
-            yield mock_df
+    # Mocker le client InfluxDB pour éviter toute connexion réelle
+    with patch("influxdb_client.InfluxDBClient", autospec=True) as mock_client:
+        mock_instance = mock_client.return_value
+        mock_instance.query_api.return_value.query_data_frame.return_value = mock_df
+        # Mocker les fonctions spécifiques
+        with patch("app.services.lstm_model.load_data_from_influx", return_value=mock_df):
+            with patch("app.utils.time_series.load_energy_consumption_data", return_value=mock_df):
+                yield mock_df
 
 @pytest.mark.asyncio
 async def test_load_data(mock_influx_data):
