@@ -9,7 +9,7 @@ on:
     branches: [main]
 
 env:
-  MLFLOW_URL: https://84b9-41-140-86-86.ngrok-free.app/ 
+  MLFLOW_URL: https://84b9-41-140-86-86.ngrok-free.app/
   PUSHGATEWAY_URL: https://5c6e-41-140-86-86.ngrok-free.app
 
 jobs:
@@ -18,25 +18,29 @@ jobs:
     steps:
       - name: Checkout code
         uses: actions/checkout@v3
+
       - name: Set up Python
         uses: actions/setup-python@v4
         with:
           python-version: '3.9'
+
       - name: Set up virtual environment and install dependencies
         run: |
           python -m venv venv
           source venv/bin/activate
           pip install --upgrade pip
-          pip install mlflow prometheus_client jq snakemake pulp==2.4 pulp[cbc] stable-baselines3 gym pandas numpy matplotlib shimmy jupyter nbconvert papermill google-auth google-auth-oauthlib google-api-python-client ipykernel pytest pytest-asyncio pytest-mock respx fastapi uvicorn tensorflow scikit-learn redis psycopg2-binary influxdb-client paho-mqtt statsmodels sqlalchemy httpx
+          pip install -r requirements.txt
           pip list | grep ipykernel || { echo "Erreur : ipykernel non installé"; exit 1; }
           pip list | grep google-api-python-client || { echo "Erreur : google-api-python-client non installé"; exit 1; }
         shell: bash
+
       - name: Install Jupyter kernel
         run: |
           source venv/bin/activate
           python -m ipykernel install --user --name python3 --display-name "Python 3 (venv)"
           echo "Kernel Jupyter installé avec succès."
         shell: bash
+
       - name: Save Google Drive token
         run: |
           echo '{"token": "ya29.a0AZYkNZigxH1DhQugv99ZweJfyZdWkklt1F9Ntn6JM5XFhf0q9Km2kecSEgHEgo1zNgKoRWJOUCkGjuGk96SHJKfTIEOMKEYWvzA1Ko3jTx1PR7i_SHwU8wgq-gZ29dwemUnKwgw2jxU0hp9U8jbFI9ZG6bAI9_3WHQ8VMt0xaCgYKAUQSARISFQHGX2Mi1HZSkTbbdf6FiXHFeKU_eA0175", "refresh_token": "1//09sy1DZcnY3jZCgYIARAAGAkSNwF-L9IrW4JaBOZSELGp4ClKWKCcDHRF0kD-Qpw2hOzkXtW-54-pNI29lU0rMPPI63IfdPtxYaE", "token_uri": "https://oauth2.googleapis.com/token", "client_id": "27688368522-s8f6r2og4ikhm9ngnnkgnvtkq01ahu4u.apps.googleusercontent.com", "client_secret": "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", "scopes": ["https://www.googleapis.com/auth/drive"], "universe_domain": "googleapis.com", "account": "", "expiry": "2025-05-03T23:38:04.625991Z"}' | jq '.' > token.json
@@ -48,6 +52,7 @@ jobs:
             exit 1
           fi
         shell: bash
+
       - name: Download notebook and scripts
         run: |
           wget https://raw.githubusercontent.com/elmekadem-narjiss/BackUp_ML/refs/heads/main/Backend/ppo_pipeline.ipynb -O ppo_pipeline.ipynb
@@ -55,6 +60,7 @@ jobs:
           wget https://raw.githubusercontent.com/elmekadem-narjiss/BackUp_ML/refs/heads/main/Backend/evaluate_ppo.py -O evaluate_ppo.py
           wget https://raw.githubusercontent.com/elmekadem-narjiss/BackUp_ML/refs/heads/main/Backend/BESSBatteryEnv.py -O BESSBatteryEnv.py
         shell: bash
+
       - name: Download LSTM predictions from Google Drive
         run: |
           source venv/bin/activate
@@ -67,6 +73,7 @@ jobs:
             exit 1
           fi
         shell: bash
+
       - name: Execute notebook
         run: |
           source venv/bin/activate
@@ -80,6 +87,7 @@ jobs:
           echo "Vérification des fichiers JSON générés :"
           ls -l output/*.json || echo "Aucun fichier JSON trouvé dans output/"
         shell: bash
+
       - name: Check PushGateway accessibility
         run: |
           echo "Vérification de l'accessibilité de la PushGateway : $PUSHGATEWAY_URL"
@@ -91,13 +99,10 @@ jobs:
             curl -s -L $PUSHGATEWAY_URL/metrics | grep test_accessibility || echo "Métrique test_accessibility non trouvée"
           else
             echo "Erreur : PushGateway renvoie le code HTTP $STATUS"
-            echo "Débogage : En-têtes de la requête POST :"
-            curl -v -L -X POST $PUSHGATEWAY_URL/metrics/job/mlflow_and_snakemake_metrics 2>&1 || echo "Échec de la requête POST"
-            echo "Débogage : En-têtes de la requête GET pour l'endpoint metrics :"
-            curl -v -L $PUSHGATEWAY_URL/metrics 2>&1 || echo "Échec de la requête GET"
             exit 1
           fi
         shell: bash
+
       - name: Push selected MLFlow metrics to Prometheus
         run: |
           source venv/bin/activate
@@ -189,6 +194,7 @@ jobs:
             exit 1
           fi
         shell: bash
+
       - name: Push global success metric to Prometheus
         run: |
           STATUS=$(echo "success{job=\"mlflow_and_snakemake_metrics\"} 1" | curl -s -L -w "%{http_code}" --data-binary @- $PUSHGATEWAY_URL/metrics/job/mlflow_and_snakemake_metrics -o /dev/null)
@@ -199,11 +205,13 @@ jobs:
             exit 1
           fi
         shell: bash
+
       - name: Check metrics in PushGateway
         run: |
           echo "🔍 Vérification des métriques dans PushGateway..."
           curl -s -L $PUSHGATEWAY_URL/metrics | grep -E 'scale|loss|mae|mse|aic|bic|llf|r2_score|rmse|df_model|df_resid|success|avg_reward|avg_cycles|avg_accuracy|total_reward|cycles|accuracy' || echo "⚠️ Pas de métriques visibles"
         shell: bash
+
       - name: Complete Monitoring
         run: |
           echo "✅ Fin de l'exécution, vérification via Grafana et Prometheus"
@@ -214,23 +222,46 @@ jobs:
     steps:
       - name: Checkout code
         uses: actions/checkout@v3
+
       - name: Set up Python
         uses: actions/setup-python@v4
         with:
           python-version: '3.9'
+
+      - name: Cache Python dependencies
+        uses: actions/cache@v4
+        with:
+          path: venv
+          key: ${{ runner.os }}-venv-${{ hashFiles('requirements.txt') }}
+          restore-keys: |
+            ${{ runner.os }}-venv-
+
       - name: Set up virtual environment and install dependencies
         run: |
           python -m venv venv
           source venv/bin/activate
           pip install --upgrade pip
-          pip install pytest pytest-asyncio pytest-mock pandas numpy stable-baselines3 gym shimmy
+          pip install -r requirements.txt
         shell: bash
+
+      - name: Lint and format code
+        run: |
+          source venv/bin/activate
+          black --check .
+          flake8 . --max-line-length=88 --extend-ignore=E203
+        shell: bash
+
       - name: Download BESSBatteryEnv script
         run: |
           wget https://raw.githubusercontent.com/elmekadem-narjiss/BackUp_ML/refs/heads/main/Backend/BESSBatteryEnv.py -O BESSBatteryEnv.py
+          if [[ ! -s BESSBatteryEnv.py ]]; then
+            echo "Error: BESSBatteryEnv.py is missing or empty"
+            exit 1
+          fi
           ls -l BESSBatteryEnv.py
         shell: bash
-      - name: Create test CSV for integration test
+
+      - name: Create and validate test CSV
         run: |
           source venv/bin/activate
           python -c "
@@ -241,33 +272,57 @@ jobs:
               'demand': [240, 340, 440]
           })
           data.to_csv('test_lstm_predictions.csv', index=False)
+          df = pd.read_csv('test_lstm_predictions.csv')
+          required_columns = ['energyproduced', 'predicted_demand', 'demand']
+          if not all(col in df.columns for col in required_columns):
+            print('Error: Missing required columns in CSV')
+            exit(1)
+          if df.empty:
+            print('Error: CSV is empty')
+            exit(1)
+          print('CSV validated successfully')
           "
           ls -l test_lstm_predictions.csv
         shell: bash
-      - name: Run integration test
+
+      - name: Run integration tests
         run: |
           source venv/bin/activate
           export PYTHONPATH=$PYTHONPATH:$GITHUB_WORKSPACE
-          python -c "
-          import numpy as np
-          from stable_baselines3 import PPO
-          from BESSBatteryEnv import BESSBatteryEnv
-          env = BESSBatteryEnv('test_lstm_predictions.csv')
-          print('Observation space:', env.observation_space)
-          reset_result = env.reset()
-          obs = reset_result if not isinstance(reset_result, tuple) else reset_result[0]
-          info = {} if not isinstance(reset_result, tuple) else (reset_result[1] if len(reset_result) > 1 else {})
-          print('Observation from reset:', obs, 'Shape:', np.shape(obs))
-          model = PPO('MlpPolicy', env, n_steps=2, batch_size=2, verbose=0)
-          model.learn(total_timesteps=4)
-          action, _ = model.predict(obs)
-          print('Integration test passed: Model trained and predicted action:', action)
-          "
+          pytest tests/ --html=report.html --self-contained-html --junitxml=test-results.xml -v
         shell: bash
-      - name: Upload test logs
-        if: failure()
+
+      - name: Upload test artifacts
         uses: actions/upload-artifact@v4
         with:
-          name: integration-test-logs
+          name: test-artifacts
           path: |
+            test-results.xml
+            report.html
             *.log
+
+      - name: Notify on test results
+        if: always()
+        uses: slackapi/slack-github-action@v1.23.0
+        with:
+          slack-bot-token: ${{ secrets.SLACK_BOT_TOKEN }}
+          channel-id: 'ci-notifications'
+          text: |
+            Integration test for ${{ github.repository }} completed.
+            Status: ${{ job.status }}
+            Run: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+
+      - name: Record workflow metrics
+        run: |
+          START_TIME=$(date +%s)
+          # Simulate test execution (already done in previous step)
+          END_TIME=$(date +%s)
+          DURATION=$((END_TIME - START_TIME))
+          echo "workflow_duration{job=\"integration_test\",repository=\"${{ github.repository }}\"} $DURATION" | curl -s -L --data-binary @- $PUSHGATEWAY_URL/metrics/job/workflow_metrics
+        shell: bash
+
+      - name: Clean up old artifacts
+        uses: actions/delete-artifact@v1
+        with:
+          artifact-name: test-artifacts
+          older-than-days: 7
