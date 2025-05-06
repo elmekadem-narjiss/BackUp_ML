@@ -228,90 +228,98 @@ jobs:
       - name: Update test_main.py
         run: |
           cat << 'EOF' > Backend/tests/test_main.py
-          import pytest
-          from fastapi.testclient import TestClient
-          from app.main import app
-          from app.services.lstm_model import MODEL, SCALER, SEQ_LENGTH, PREDICTION_DAYS, load_model, save_predictions_to_db
-          client = TestClient(app)
-          @pytest.mark.asyncio
-          async def test_read_root():
-              response = client.get("/")
-              assert response.status_code == 200
-              assert response.json() == {"message": "Welcome to the LSTM Prediction API"}
-          @pytest.mark.asyncio
-          async def test_predict_endpoint(mocker):
-              # Mock load_model and save_predictions_to_db
-              mocker.patch("app.services.lstm_model.load_model", return_value=MODEL)
-              mocker.patch("app.services.lstm_model.save_predictions_to_db", return_value=None)
-              
-              # Sample input data
-              input_data = {
-                  "data": [[100, 200, 300]] * SEQ_LENGTH,
-                  "days": PREDICTION_DAYS
-              }
-              
-              response = client.post("/predict/", json=input_data)
-              assert response.status_code == 200
-              assert "predictions" in response.json()
-          EOF
+import pytest
+from fastapi.testclient import TestClient
+from app.main import app
+from app.services.lstm_model import MODEL, SCALER, SEQ_LENGTH, PREDICTION_DAYS, load_model, save_predictions_to_db
+client = TestClient(app)
+@pytest.mark.asyncio
+async def test_read_root():
+    response = client.get("/")
+    assert response.status_code == 200
+    assert response.json() == {"message": "Welcome to the LSTM Prediction API"}
+@pytest.mark.asyncio
+async def test_predict_endpoint(mocker):
+    # Mock load_model and save_predictions_to_db
+    mocker.patch("app.services.lstm_model.load_model", return_value=MODEL)
+    mocker.patch("app.services.lstm_model.save_predictions_to_db", return_value=None)
+    
+    # Sample input data
+    input_data = {
+        "data": [[100, 200, 300]] * SEQ_LENGTH,
+        "days": PREDICTION_DAYS
+    }
+    
+    response = client.post("/predict/", json=input_data)
+    assert response.status_code == 200
+    assert "predictions" in response.json()
+EOF
         shell: bash
       - name: Update test_model_lstm.py
         run: |
           cat << 'EOF' > Backend/tests/test_model_lstm.py
-          import pytest
-          import numpy as np
-          from app.services.lstm_model import load_model, save_predictions_to_db
-          @pytest.mark.asyncio
-          async def test_load_model(mocker):
-              mocker.patch("app.services.lstm_model.load_model", return_value=mocker.MagicMock())
-              model = load_model()
-              assert model is not None
-          @pytest.mark.asyncio
-          async def test_save_predictions_to_db(mocker):
-              mocker.patch("app.services.lstm_model.save_predictions_to_db", return_value=None)
-              predictions = np.array([1.0, 2.0, 3.0])
-              save_predictions_to_db(predictions)
-              assert True  # If no exception, test passes
-          EOF
+import pytest
+import numpy as np
+from app.services.lstm_model import load_model, save_predictions_to_db
+@pytest.mark.asyncio
+async def test_load_model(mocker):
+    mocker.patch("app.services.lstm_model.load_model", return_value=mocker.MagicMock())
+    model = load_model()
+    assert model is not None
+@pytest.mark.asyncio
+async def test_save_predictions_to_db(mocker):
+    mocker.patch("app.services.lstm_model.save_predictions_to_db", return_value=None)
+    predictions = np.array([1.0, 2.0, 3.0])
+    save_predictions_to_db(predictions)
+    assert True  # If no exception, test passes
+EOF
         shell: bash
       - name: Update app/main.py
         run: |
           cat << 'EOF' > Backend/app/main.py
-          from fastapi import FastAPI
-          from pydantic import BaseModel
-          import numpy as np
-          from app.services.lstm_model import MODEL, SCALER, SEQ_LENGTH, PREDICTION_DAYS, load_model, save_predictions_to_db
-          app = FastAPI()
-          class PredictionInput(BaseModel):
-              data: list
-              days: int
-          @app.get("/")
-          async def read_root():
-              return {"message": "Welcome to the LSTM Prediction API"}
-          @app.post("/predict/")
-          async def predict(input_data: PredictionInput):
-              model = load_model()
-              data = np.array(input_data.data)
-              predictions = model.predict(data)  # Simplified; adjust based on actual model
-              save_predictions_to_db(predictions)
-              return {"predictions": predictions.tolist()}
-          EOF
+from fastapi import FastAPI
+from pydantic import BaseModel
+import numpy as np
+from app.services.lstm_model import MODEL, SCALER, SEQ_LENGTH, PREDICTION_DAYS, load_model, save_predictions_to_db
+app = FastAPI()
+class PredictionInput(BaseModel):
+    data: list
+    days: int
+@app.get("/")
+async def read_root():
+    return {"message": "Welcome to the LSTM Prediction API"}
+@app.post("/predict/")
+async def predict(input_data: PredictionInput):
+    model = load_model()
+    data = np.array(input_data.data)
+    predictions = model.predict(data)  # Simplified; adjust based on actual model
+    save_predictions_to_db(predictions)
+    return {"predictions": predictions.tolist()}
+EOF
         shell: bash
       - name: Ensure lstm_model.py exists
         run: |
           if [ ! -f Backend/app/services/lstm_model.py ]; then
+            mkdir -p Backend/app/services
             cat << 'EOF' > Backend/app/services/lstm_model.py
-            from tensorflow.keras.models import Sequential
-            import numpy as np
-            MODEL = Sequential()  # Placeholder; replace with actual model
-            SCALER = None  # Placeholder; replace with actual scaler
-            SEQ_LENGTH = 10
-            PREDICTION_DAYS = 7
-            def load_model():
-                return MODEL
-            def save_predictions_to_db(predictions):
-                pass  # Implement database save logic if needed
-            EOF
+from tensorflow.keras.models import Sequential
+import numpy as np
+
+MODEL = Sequential()  # Placeholder; replace with actual model
+SCALER = None  # Placeholder; replace with actual scaler
+SEQ_LENGTH = 10
+PREDICTION_DAYS = 7
+
+def load_model():
+    return MODEL
+
+def save_predictions_to_db(predictions):
+    pass  # Implement database save logic if needed
+EOF
+            echo "Created Backend/app/services/lstm_model.py"
+            cat Backend/app/services/lstm_model.py
+          else
+            echo "Backend/app/services/lstm_model.py already exists"
           fi
         shell: bash
       - name: Create test CSV for BESSBatteryEnv
@@ -319,14 +327,14 @@ jobs:
           source $GITHUB_WORKSPACE/venv/bin/activate
           cd Backend
           python -c "
-          import pandas as pd
-          data = pd.DataFrame({
-              'energyproduced': [100, 200, 300],
-              'predicted_demand': [250, 350, 450],
-              'demand': [240, 340, 440]
-          })
-          data.to_csv('tests/test_lstm_predictions.csv', index=False)
-          "
+import pandas as pd
+data = pd.DataFrame({
+    'energyproduced': [100, 200, 300],
+    'predicted_demand': [250, 350, 450],
+    'demand': [240, 340, 440]
+})
+data.to_csv('tests/test_lstm_predictions.csv', index=False)
+"
           ls -l tests/test_lstm_predictions.csv
         shell: bash
       - name: Verify test CSV columns
@@ -334,12 +342,12 @@ jobs:
           source $GITHUB_WORKSPACE/venv/bin/activate
           cd Backend
           python -c "
-          import pandas as pd
-          df = pd.read_csv('tests/test_lstm_predictions.csv')
-          expected_columns = ['energyproduced', 'predicted_demand', 'demand']
-          assert all(col in df.columns for col in expected_columns), f'CSV missing expected columns: {expected_columns}, found: {list(df.columns)}'
-          print('Test CSV columns verified:', list(df.columns))
-          "
+import pandas as pd
+df = pd.read_csv('tests/test_lstm_predictions.csv')
+expected_columns = ['energyproduced', 'predicted_demand', 'demand']
+assert all(col in df.columns for col in expected_columns), f'CSV missing expected columns: {expected_columns}, found: {list(df.columns)}'
+print('Test CSV columns verified:', list(df.columns))
+"
         shell: bash
       - name: Set up test environment
         run: |
