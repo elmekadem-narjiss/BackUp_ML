@@ -1,13 +1,14 @@
 import pytest
 import pytest_asyncio
 import pandas as pd
+from unittest.mock import patch
 from fastapi.testclient import TestClient
 from app.main import app
 
 client = TestClient(app)
 
 @pytest.fixture
-def mock_influx_data(mocker):
+def mock_influx_data():
     mock_df = pd.DataFrame({
         "energyproduced": [100, 200, 300],
         "temperature": [20, 21, 22],
@@ -15,8 +16,8 @@ def mock_influx_data(mocker):
         "predicted_demand": [150, 250, 350],
         "demand": [140, 240, 340]
     })
-    mocker.patch("app.services.lstm_model.load_data_from_influx", return_value=mock_df)
-    return mock_df
+    with patch("app.services.lstm_model.load_data_from_influx", return_value=mock_df):
+        yield mock_df
 
 @pytest.mark.asyncio
 async def test_load_data(mock_influx_data):
