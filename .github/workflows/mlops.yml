@@ -227,6 +227,7 @@ jobs:
         shell: bash
       - name: Create test CSV for BESSBatteryEnv
         run: |
+          cd Backend
           python -c "
           import pandas as pd
           data = pd.DataFrame({
@@ -238,9 +239,9 @@ jobs:
           "
           ls -l tests/test_lstm_predictions.csv
         shell: bash
-        working-directory: ./Backend
       - name: Verify test CSV columns
         run: |
+          cd Backend
           python -c "
           import pandas as pd
           df = pd.read_csv('tests/test_lstm_predictions.csv')
@@ -249,7 +250,6 @@ jobs:
           print('Test CSV columns verified:', list(df.columns))
           "
         shell: bash
-        working-directory: ./Backend
       - name: Set up test environment
         run: |
           source venv/bin/activate
@@ -258,16 +258,15 @@ jobs:
         shell: bash
       - name: Run tests
         run: |
+          cd Backend
           source venv/bin/activate
           pytest tests/ --verbose --log-file=pytest.log
         shell: bash
-        working-directory: ./Backend
       - name: Upload test logs
         if: failure()
         uses: actions/upload-artifact@v3
         with:
           name: test-logs
           path: |
-            tests/*.log
-            pytest.log
-        working-directory: ./Backend
+            Backend/tests/*.log
+            Backend/pytest.log
