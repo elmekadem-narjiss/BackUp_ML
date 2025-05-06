@@ -17,7 +17,8 @@ def mock_influx_data():
         "demand": [140, 240, 340]
     })
     with patch("app.services.lstm_model.load_data_from_influx", return_value=mock_df):
-        yield mock_df
+        with patch("app.utils.time_series.load_energy_consumption_data", return_value=mock_df):
+            yield mock_df
 
 @pytest.mark.asyncio
 async def test_load_data(mock_influx_data):
@@ -41,8 +42,8 @@ async def test_forecast_data(mock_influx_data):
 async def test_forecast_no_data(mock_influx_data):
     try:
         response = client.post("/forecast", json={})
-        assert response.status_code == 400, f"Expected status code 400, got {response.status_code}: {response.text}"
-        assert "error" in response.json(), f"Expected 'error' in response, got {response.json()}"
+        assert response.status_code == 422, f"Expected status code 422, got {response.status_code}: {response.text}"
+        assert "detail" in response.json(), f"Expected 'detail' in response, got {response.json()}"
     except Exception as e:
         pytest.fail(f"Unexpected error in test_forecast_no_data: {str(e)}")
 
