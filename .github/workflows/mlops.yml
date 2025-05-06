@@ -250,11 +250,9 @@ jobs:
           source venv/bin/activate
           export PYTHONPATH=$PYTHONPATH:$GITHUB_WORKSPACE
           python -c "
-          import pandas as pd
           from stable_baselines3 import PPO
           from BESSBatteryEnv import BESSBatteryEnv
-          df = pd.read_csv('test_lstm_predictions.csv')
-          env = BESSBatteryEnv(df)
+          env = BESSBatteryEnv('test_lstm_predictions.csv')
           model = PPO('MlpPolicy', env, n_steps=2, verbose=0)
           model.learn(total_timesteps=4)
           obs = env.reset()[0]
