@@ -1,47 +1,53 @@
 import pytest
-import pandas as pd
-import numpy as np
-from app.services.lstm_model import prepare_data, build_model, train_and_save, load_model, save_predictions_to_db
-from sklearn.preprocessing import MinMaxScaler
 import tensorflow as tf
+from sklearn.preprocessing import MinMaxScaler
+from unittest.mock import MagicMock, patch
+import pickle
+import pandas as pd
+from app.services.lstm_model import prepare_data, build_model, train_and_save, load_model, save_predictions_to_db
 
 @pytest.fixture
 def sample_df():
-    """Fixture pour un DataFrame de test."""
     return pd.DataFrame({
-        "energyproduced": np.random.uniform(0, 1, 100),
-        "temperature": np.random.uniform(0, 1, 100),
-        "humidity": np.random.uniform(0, 1, 100),
-        "month": np.random.randint(1, 13, 100),
-        "week_of_year": np.random.randint(1, 53, 100),
-        "hour": np.random.randint(0, 24, 100)
+        "energyproduced": [100, 200, 300, 400, 500],
+        "temperature": [20, 22, 24, 23, 25],
+        "humidity": [50, 55, 60, 58, 62],
+        "month": [1, 1, 1, 2, 2],
+        "week_of_year": [1, 1, 2, 2, 3],
+        "hour": [0, 6, 12, 18, 0]
     })
 
 def test_prepare_data(sample_df):
-    """Teste la préparation des données."""
+    """Teste la préparation des données pour l'entraînement."""
     X, y, scaler = prepare_data(sample_df)
-    assert X.shape[0] > 0
-    assert y.shape[0] > 0
+    assert X.shape[0] == len(sample_df) - 60
+    assert y.shape[0] == len(sample_df) - 60
     assert isinstance(scaler, MinMaxScaler)
 
 def test_build_model():
-    """Teste la construction du modèle."""
+    """Teste la construction du modèle LSTM."""
     model = build_model()
     assert isinstance(model, tf.keras.Sequential)
-    assert len(model.layers) == 4  # LSTM, LSTM, Dense, Reshape
+    assert len(model.layers) == 4
 
-def test_train_and_save(sample_df, monkeypatch):
+def test_train_and_save(tmp_path, sample_df):
     """Teste l'entraînement et la sauvegarde du modèle."""
-    monkeypatch.setattr("app.services.lstm_model.load_data_from_influx", lambda: sample_df)
-    model, scaler, history, X, y = train_and_save()
+    model_path = tmp_path / "model.keras"
+    scaler_path = tmp_path / "scaler.pkl"
+    model, scaler = train_and_save(sample_df, str(model_path), str(scaler_path), epochs=1)
     assert isinstance(model, tf.keras.Sequential)
     assert isinstance(scaler, MinMaxScaler)
-    assert history is not None
+    assert model_path.exists()
+    assert scaler_path.exists()
 
 def test_load_model(tmp_path, monkeypatch):
     """Teste le chargement du modèle et du scaler."""
-    import pickle
-    model = tf.keras.Sequential([tf.keras.layers.Dense(1, input_shape=(60, 6))])
+    model = tf.keras.Sequential([
+        tf.keras.layers.LSTM(50, return_sequences=True, input_shape=(60, 6)),
+        tf.keras.layers.LSTM(50),
+        tf.keras.layers.Dense(25),
+        tf.keras.layers.Dense(1)
+    ])
     model.save(tmp_path / "model.keras")
     with open(tmp_path / "scaler.pkl", "wb") as f:
         pickle.dump(MinMaxScaler(), f)
