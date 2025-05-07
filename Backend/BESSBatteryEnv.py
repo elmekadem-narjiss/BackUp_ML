@@ -1,95 +1,79 @@
 import gym
-from gym import spaces
-import numpy as np
 import pandas as pd
+import numpy as np
+from gym import spaces
 
 class BESSBatteryEnv(gym.Env):
-    def __init__(self, data_path='lstm_predictions_charger.csv'):
+    def __init__(self, data_file):
         super(BESSBatteryEnv, self).__init__()
-        
-        # Charger les données
-        self.data = pd.read_csv(data_path)
-        
-        # Identifier la colonne pour la demande
-        self.demand_column = next((col for col in ['energyproduced', 'predicted_demand', 'demand'] if col in self.data.columns), None)
-        
-        # Vérifier la présence de la colonne nécessaire
-        if self.demand_column is None:
-            available_columns = list(self.data.columns)
-            raise ValueError(
-                f"Colonne manquante dans le CSV : 'energyproduced', 'predicted_demand' ou 'demand'. "
-                f"Colonnes disponibles : {available_columns}"
-            )
-        
-        # Paramètres de la batterie
-        self.capacity = 100.0  # Capacité de la batterie en kWh
-        self.max_charge_rate = 50.0  # Taux de charge max en kW
-        self.max_discharge_rate = 50.0  # Taux de décharge max en kW
-        self.efficiency = 0.95  # Efficacité de charge/décharge
-        self.state_of_charge = 0.5 * self.capacity  # État initial à 50%
-        
-        # Espace d'actions : charge (>0) ou décharge (<0) en kW
+        self.data = pd.read_csv(data_file)
+        self.current_step = 0
+        self.max_steps = len(self.data) - 1
+        self.soc = 0.5  # State of Charge (initially 50%)
+        self.max_soc = 1.0
+        self.min_soc = 0.0
+        self.battery_capacity = 1000  # kWh
+        self.max_charge_rate = 200  # kW
+        self.max_discharge_rate = 200  # kW
+        self.observation_space = spaces.Box(
+            low=np.array([0, 0, 0, 0]),
+            high=np.array([1000, 1000, 1000, 1]),
+            dtype=np.float32
+        )
         self.action_space = spaces.Box(
             low=-self.max_discharge_rate,
             high=self.max_charge_rate,
             shape=(1,),
             dtype=np.float32
         )
-        
-        # Espace d'observations : [state_of_charge, energy_price, predicted_demand]
-        self.observation_space = spaces.Box(
-            low=np.array([0.0, 0.0, 0.0]),
-            high=np.array([self.capacity, np.inf, np.inf]),
-            shape=(3,),
-            dtype=np.float32
-        )
-        
-        self.current_step = 0
-        self.max_steps = len(self.data) - 1
 
     def reset(self):
         self.current_step = 0
-        self.state_of_charge = 0.5 * self.capacity
-        return self._get_observation()
+        self.soc = 0.5
+        return np.array([
+            self.data['energyproduced'].iloc[0],
+            self.data['predicted_demand'].iloc[0],
+            self.data['demand'].iloc[0],
+            self.soc
+        ], dtype=np.float32)
 
     def step(self, action):
-        action = action[0]
-        prev_soc = self.state_of_charge
+        energy_produced = self.data['energyproduced'].iloc[self.current_step]
+        predicted_demand = self.data['predicted_demand'].iloc[self.current_step]
+        actual_demand = self.data['demand'].iloc[self.current_step]
         
-        # Calculer la nouvelle charge
-        if action > 0:  # Charge
-            charge = min(action * self.efficiency, self.max_charge_rate, self.capacity - self.state_of_charge)
-            self.state_of_charge += charge
-        else:  # Décharge
-            discharge = min(-action / self.efficiency, self.max_discharge_rate, self.state_of_charge)
-            self.state_of_charge -= discharge
+        # Apply action (charge/discharge)
+        action = np.clip(action[0], -self.max_discharge_rate, self.max_charge_rate)
+        energy_change = action / self.battery_capacity
+        new_soc = np.clip(self.soc + energy_change, self.min_soc, self.max_soc)
         
-        # Avancer le step
+        # Calculate reward
+        energy_balance = energy_produced + action - actual_demand
+        reward = -abs(energy_balance)  # Minimize imbalance
+        if new_soc == self.min_soc or new_soc == self.max_soc:
+            reward -= 10  # Penalty for hitting SOC limits
+        
+        self.soc = new_soc
         self.current_step += 1
+        
+        # Check if episode is done
         done = self.current_step >= self.max_steps
+        truncated = False
         
-        # Calculer la récompense
-        reward = self._calculate_reward(action)
+        # Prepare observation
+        obs = np.array([
+            energy_produced,
+            predicted_demand,
+            actual_demand,
+            self.soc
+        ], dtype=np.float32)
         
-        return self._get_observation(), reward, done, {}
+        info = {
+            'energy_balance': energy_balance,
+            'soc': self.soc
+        }
+        
+        return obs, reward, done, truncated, info
 
-    def _get_observation(self):
-        # Utiliser une valeur par défaut pour energy_price
-        energy_price = 0.1  # Valeur par défaut en absence de colonne
-        predicted_demand = self.data.iloc[self.current_step][self.demand_column]
-        return np.array([self.state_of_charge, energy_price, predicted_demand], dtype=np.float32)
-
-    def _calculate_reward(self, action):
-        # Utiliser une valeur par défaut pour energy_price
-        energy_price = 0.1  # Valeur par défaut en absence de colonne
-        predicted_demand = self.data.iloc[self.current_step][self.demand_column]
-        
-        # Récompense basée sur le coût et la satisfaction de la demande
-        cost = action * energy_price
-        demand_error = abs(predicted_demand - action)
-        reward = -cost - 0.1 * demand_error
-        
-        return reward
-
-    def render(self, mode='human'):
-        print(f"Step: {self.current_step}, SoC: {self.state_of_charge}, Action: {self.action_space.sample()[0]}")
+    def render(self):
+        print(f"Step: {self.current_step}, SOC: {self.soc:.2f}")
