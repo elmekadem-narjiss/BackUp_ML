@@ -8,7 +8,7 @@ class BESSBatteryEnv(gym.Env):
         super(BESSBatteryEnv, self).__init__()
         self.data = pd.read_csv(data_file)
         # Validate required columns
-        required_columns = ['energyproduced', 'predictedDemand', 'actualDemand']
+        required_columns = ['energyproduced', 'future_production']
         missing_columns = [col for col in required_columns if col not in self.data.columns]
         if missing_columns:
             raise ValueError(f"Missing required columns in CSV: {missing_columns}")
@@ -37,15 +37,15 @@ class BESSBatteryEnv(gym.Env):
         self.soc = 0.5
         return np.array([
             self.data['energyproduced'].iloc[0],
-            self.data['predictedDemand'].iloc[0],
-            self.data['actualDemand'].iloc[0],
+            self.data['future_production'].iloc[0],
+            self.data['energyproduced'].iloc[0],  # Using energyproduced as proxy for actualDemand
             self.soc
         ], dtype=np.float32)
 
     def step(self, action):
         energy_produced = self.data['energyproduced'].iloc[self.current_step]
-        predicted_demand = self.data['predictedDemand'].iloc[self.current_step]
-        actual_demand = self.data['actualDemand'].iloc[self.current_step]
+        predicted_demand = self.data['future_production'].iloc[self.current_step]
+        actual_demand = self.data['energyproduced'].iloc[self.current_step]  # Using energyproduced as proxy
         
         # Apply action (charge/discharge)
         action = np.clip(action[0], -self.max_discharge_rate, self.max_charge_rate)
