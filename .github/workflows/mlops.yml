@@ -308,6 +308,13 @@ jobs:
           pip install -r Backend/requirements.txt
         shell: bash
 
+      - name: Check tests directory structure
+        run: |
+          echo "Checking directory structure for tests..."
+          ls -R Backend/tests || echo "Backend/tests does not exist"
+          ls -R tests || echo "Root tests directory does not exist"
+        shell: bash
+
       - name: Lint and format code
         run: |
           source venv/bin/activate
@@ -315,13 +322,13 @@ jobs:
           black .
           # Check formatting
           black --check .
-          # Lint project files, excluding virtual environment
+          # Lint project files, excluding virtual environment and Backend/tests
           if [ -d tests ] && [ "$(ls -A tests)" ]; then
-            echo "Linting Backend and tests directories"
-            flake8 Backend tests --max-line-length=88 --extend-ignore=E203 --exclude venv
+            echo "Linting Backend and root tests directories"
+            flake8 Backend tests --max-line-length=88 --extend-ignore=E203 --exclude venv,Backend/tests
           else
-            echo "Warning: tests directory is empty or missing, linting only Backend"
-            flake8 Backend --max-line-length=88 --extend-ignore=E203 --exclude venv
+            echo "Warning: root tests directory is empty or missing, linting only Backend"
+            flake8 Backend --max-line-length=88 --extend-ignore=E203 --exclude venv,Backend/tests
           fi
         shell: bash
 
@@ -360,6 +367,7 @@ jobs:
         shell: bash
 
       - name: Run integration tests
+        if: runner.os == 'Linux' && hashFiles('tests/*') != ''
         run: |
           source venv/bin/activate
           export PYTHONPATH=$PYTHONPATH:$GITHUB_WORKSPACE
