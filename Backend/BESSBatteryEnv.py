@@ -7,6 +7,11 @@ class BESSBatteryEnv(gym.Env):
     def __init__(self, data_file):
         super(BESSBatteryEnv, self).__init__()
         self.data = pd.read_csv(data_file)
+        # Validate required columns
+        required_columns = ['energyproduced', 'predicted_demand', 'demand']
+        missing_columns = [col for col in required_columns if col not in self.data.columns]
+        if missing_columns:
+            raise ValueError(f"Missing required columns in CSV: {missing_columns}")
         self.current_step = 0
         self.max_steps = len(self.data) - 1
         self.soc = 0.5  # State of Charge (initially 50%)
