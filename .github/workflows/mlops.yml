@@ -100,6 +100,8 @@ jobs:
           if [ -f lstm_predictions_charger.csv ]; then
             echo "Fichier lstm_predictions_charger.csv téléchargé avec succès."
             ls -l lstm_predictions_charger.csv
+            python -c "import pandas as pd; df = pd.read_csv('lstm_predictions_charger.csv'); print('Columns:', df.columns.tolist())" || { echo "Erreur : impossible de lire les colonnes du CSV"; exit 1; }
+            python -c "import pandas as pd; df = pd.read_csv('lstm_predictions_charger.csv'); print('First few rows:', df.head().to_string())" || { echo "Erreur : impossible de lire les premières lignes du CSV"; exit 1; }
           else
             echo "Erreur : lstm_predictions_charger.csv n'a pas été créé."
             exit 1
