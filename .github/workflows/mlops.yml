@@ -315,7 +315,8 @@ jobs:
           black .
           # Check formatting
           black --check .
-          flake8 . --max-line-length=88 --extend-ignore=E203
+          # Lint only project files, excluding virtual environment
+          flake8 Backend tests --max-line-length=88 --extend-ignore=E203 --exclude venv
         shell: bash
 
       - name: Download BESSBatteryEnv script
