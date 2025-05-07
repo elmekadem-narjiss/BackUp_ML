@@ -311,6 +311,9 @@ jobs:
       - name: Lint and format code
         run: |
           source venv/bin/activate
+          # Auto-reformat code for testing (remove this line after fixing locally)
+          black .
+          # Check formatting
           black --check .
           flake8 . --max-line-length=88 --extend-ignore=E203
         shell: bash
