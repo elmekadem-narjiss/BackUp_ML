@@ -31,7 +31,6 @@ jobs:
           key: ${{ runner.os }}-venv-${{ hashFiles('Backend/requirements.txt') }}
           restore-keys: |
             ${{ runner.os }}-venv-
-
       - name: Verify requirements.txt
         run: |
           if [ ! -f Backend/requirements.txt ]; then
@@ -100,9 +99,6 @@ jobs:
           if [ -f lstm_predictions_charger.csv ]; then
             echo "Fichier lstm_predictions_charger.csv téléchargé avec succès."
             ls -l lstm_predictions_charger.csv
-            python -c "import pandas as pd; df = pd.read_csv('lstm_predictions_charger.csv'); print('Columns:', df.columns.tolist())" || { echo "Erreur : impossible de lire les colonnes du CSV"; exit 1; }
-            python -c "import pandas as pd; df = pd.read_csv('lstm_predictions_charger.csv'); print('First few rows:', df.head().to_string())" || { echo "Erreur : impossible de lire les premières lignes du CSV"; exit 1; }
-            python -c "import pandas as pd; df = pd.read_csv('lstm_predictions_charger.csv'); print('Column validation:'); required = ['energyproduced', 'predictedDemand', 'actualDemand']; missing = [col for col in required if col not in df.columns]; print('Missing columns:', missing)" || { echo "Erreur : impossible de valider les colonnes"; exit 1; }
           else
             echo "Erreur : lstm_predictions_charger.csv n'a pas été créé."
             exit 1
@@ -263,7 +259,6 @@ jobs:
             Build job for ${{ github.repository }} completed.
             Status: ${{ job.status }}
             Run: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
-
       - name: Record build workflow metrics
         run: |
           START_TIME=$(date +%s)
@@ -291,7 +286,6 @@ jobs:
           key: ${{ runner.os }}-venv-${{ hashFiles('Backend/requirements.txt') }}
           restore-keys: |
             ${{ runner.os }}-venv-
-
       - name: Verify requirements.txt
         run: |
           if [ ! -f Backend/requirements.txt ]; then
@@ -352,12 +346,12 @@ jobs:
           import pandas as pd
           data = pd.DataFrame({
               'energyproduced': [100, 200, 300],
-              'predictedDemand': [250, 350, 450],
-              'actualDemand': [240, 340, 440]
+              'predicted_demand': [250, 350, 450],
+              'demand': [240, 340, 440]
           })
           data.to_csv('test_lstm_predictions.csv', index=False)
           df = pd.read_csv('test_lstm_predictions.csv')
-          required_columns = ['energyproduced', 'predictedDemand', 'actualDemand']
+          required_columns = ['energyproduced', 'predicted_demand', 'demand']
           if not all(col in df.columns for col in required_columns):
             print('Error: Missing required columns in CSV')
             exit(1)
@@ -385,7 +379,6 @@ jobs:
             test-results.xml
             report.html
             *.log
-
       - name: Notify on test results
         if: always()
         uses: slackapi/slack-github-action@v1.23.0
@@ -397,7 +390,6 @@ jobs:
             Integration test for ${{ github.repository }} completed.
             Status: ${{ job.status }}
             Run: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
-
       - name: Record workflow metrics
         run: |
           START_TIME=$(date +%s)
