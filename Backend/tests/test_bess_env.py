@@ -1,5 +1,4 @@
 import pytest
-import numpy as np
 from stable_baselines3 import PPO
 from BESSBatteryEnv import BESSBatteryEnv
 
