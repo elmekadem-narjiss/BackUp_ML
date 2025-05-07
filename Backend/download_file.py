@@ -8,6 +8,10 @@ import os
 import json
 
 def authenticate_drive():
+    # Load client secrets
+    with open('client_secrets.json', 'r') as f:
+        client_secrets = json.load(f)
+    
     # Load existing token
     creds = None
     if os.path.exists('token.json'):
@@ -27,6 +31,10 @@ def authenticate_drive():
         if creds and creds.expired and creds.refresh_token:
             creds.refresh(Request())
         else:
+            flow = InstalledAppFlow.from_client_secrets_file(
+                'client_secrets.json',
+                scopes=['https://www.googleapis.com/auth/drive']
+            )
             raise Exception(
                 "Token is invalid and cannot run interactive auth in CI"
             )
