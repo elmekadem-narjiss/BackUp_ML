@@ -6,7 +6,10 @@ import os
 
 # Configuration pour InfluxDB
 INFLUX_URL = os.getenv("INFLUX_URL", "http://localhost:8086")
-INFLUX_TOKEN = os.getenv("INFLUX_TOKEN", "6gVj-CNfMCVW0otLynr2-E4WTfI-ww6Z2QV0NSe-LrYfVHpFCnfGf-XUNtQ31_9CJna40ifv67fKRnKfoDnKAg==")
+INFLUX_TOKEN = os.getenv(
+    "INFLUX_TOKEN",
+    "6gVj-CNfMCVW0otLynr2-E4WTfI-ww6Z2QV0NSe-LrYfVHpFCnfGf-XUNtQ31_9CJna40ifv67fKRnKfoDnKAg=="
+)
 INFLUX_ORG = os.getenv("INFLUX_ORG", "iot_lab")
 INFLUX_BUCKET = os.getenv("INFLUX_BUCKET", "energy_data")
 
@@ -30,7 +33,7 @@ PG_PORT = os.getenv("PG_PORT", "5432")
 def connect_influxdb():
     """Établir une connexion à InfluxDB."""
     print("🌐 Tentative de connexion à InfluxDB...")
-    print(f"🔍 Vérification des variables :")
+    print("🔍 Vérification des variables :")
     print(f"  - INFLUX_URL: {INFLUX_URL}")
     print(f"  - INFLUX_TOKEN: {'Présent' if INFLUX_TOKEN else 'Absent'}")
     print(f"  - INFLUX_ORG: {INFLUX_ORG}")
@@ -40,7 +43,7 @@ def connect_influxdb():
         print("✅ Connexion à InfluxDB établie.")
         return client
     except Exception as e:
-        print(f"⚠️ Erreur lors de la connexion à InfluxDB : {e}")
+        print("Erreur lors de la connexion à InfluxDB")
         raise
 
 def connect_mqtt():
