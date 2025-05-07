@@ -102,6 +102,7 @@ jobs:
             ls -l lstm_predictions_charger.csv
             python -c "import pandas as pd; df = pd.read_csv('lstm_predictions_charger.csv'); print('Columns:', df.columns.tolist())" || { echo "Erreur : impossible de lire les colonnes du CSV"; exit 1; }
             python -c "import pandas as pd; df = pd.read_csv('lstm_predictions_charger.csv'); print('First few rows:', df.head().to_string())" || { echo "Erreur : impossible de lire les premières lignes du CSV"; exit 1; }
+            python -c "import pandas as pd; df = pd.read_csv('lstm_predictions_charger.csv'); print('Column validation:'); required = ['energyproduced', 'predictedDemand', 'actualDemand']; missing = [col for col in required if col not in df.columns]; print('Missing columns:', missing)" || { echo "Erreur : impossible de valider les colonnes"; exit 1; }
           else
             echo "Erreur : lstm_predictions_charger.csv n'a pas été créé."
             exit 1
@@ -351,12 +352,12 @@ jobs:
           import pandas as pd
           data = pd.DataFrame({
               'energyproduced': [100, 200, 300],
-              'predicted_demand': [250, 350, 450],
-              'demand': [240, 340, 440]
+              'predictedDemand': [250, 350, 450],
+              'actualDemand': [240, 340, 440]
           })
           data.to_csv('test_lstm_predictions.csv', index=False)
           df = pd.read_csv('test_lstm_predictions.csv')
-          required_columns = ['energyproduced', 'predicted_demand', 'demand']
+          required_columns = ['energyproduced', 'predictedDemand', 'actualDemand']
           if not all(col in df.columns for col in required_columns):
             print('Error: Missing required columns in CSV')
             exit(1)
