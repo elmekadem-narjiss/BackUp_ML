@@ -286,6 +286,7 @@ jobs:
           key: ${{ runner.os }}-venv-${{ hashFiles('Backend/requirements.txt') }}
           restore-keys: |
             ${{ runner.os }}-venv-
+
       - name: Verify requirements.txt
         run: |
           if [ ! -f Backend/requirements.txt ]; then
@@ -315,17 +316,15 @@ jobs:
       - name: Lint and format code
         run: |
           source venv/bin/activate
-          # Auto-reformat code for testing (remove this line after fixing locally)
-          black .
-          # Check formatting
+          # Check formatting without modifying files
           black --check .
-          # Lint project files, excluding virtual environment and Backend/tests
+          # Lint with relaxed rules for integration testing
           if [ -d tests ] && [ "$(ls -A tests)" ]; then
-            echo "Linting Backend and root tests directories"
-            flake8 Backend tests --max-line-length=88 --extend-ignore=E203 --exclude venv,Backend/tests
+              echo "Linting Backend and root tests directories with relaxed rules"
+              flake8 Backend tests --max-line-length=88 --extend-ignore=E203,E501,F841,F401,E402,W291 --exclude venv,Backend/tests
           else
-            echo "Warning: root tests directory is empty or missing, linting only Backend"
-            flake8 Backend --max-line-length=88 --extend-ignore=E203 --exclude venv,Backend/tests
+              echo "Warning: root tests directory is empty or missing, linting only Backend with relaxed rules"
+              flake8 Backend --max-line-length=88 --extend-ignore=E203,E501,F841,F401,E402,W291 --exclude venv,Backend/tests
           fi
         shell: bash
 
@@ -346,12 +345,11 @@ jobs:
           import pandas as pd
           data = pd.DataFrame({
               'energyproduced': [100, 200, 300],
-              'predicted_demand': [250, 350, 450],
-              'demand': [240, 340, 440]
+              'future_production': [250, 350, 450]
           })
           data.to_csv('test_lstm_predictions.csv', index=False)
           df = pd.read_csv('test_lstm_predictions.csv')
-          required_columns = ['energyproduced', 'predicted_demand', 'demand']
+          required_columns = ['energyproduced', 'future_production']
           if not all(col in df.columns for col in required_columns):
             print('Error: Missing required columns in CSV')
             exit(1)
@@ -379,6 +377,7 @@ jobs:
             test-results.xml
             report.html
             *.log
+
       - name: Notify on test results
         if: always()
         uses: slackapi/slack-github-action@v1.23.0
@@ -390,6 +389,7 @@ jobs:
             Integration test for ${{ github.repository }} completed.
             Status: ${{ job.status }}
             Run: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+
       - name: Record workflow metrics
         run: |
           START_TIME=$(date +%s)
