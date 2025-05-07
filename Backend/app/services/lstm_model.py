@@ -2,12 +2,6 @@ from tensorflow.keras.models import load_model as keras_load_model
 import pickle
 import os
 import logging
-from influxdb_client import InfluxDBClient
-import pandas as pd
-import numpy as np
-from sklearn.preprocessing import MinMaxScaler
-from tensorflow.keras.models import Sequential
-from tensorflow.keras.layers import LSTM, Dense
 
 # Configurer le logging
 logging.basicConfig(level=logging.DEBUG)
@@ -15,7 +9,10 @@ logger = logging.getLogger(__name__)
 
 # Configuration pour InfluxDB
 INFLUX_URL = os.getenv("INFLUX_URL", "http://localhost:8086")
-INFLUX_TOKEN = os.getenv("INFLUX_TOKEN", "6gVj-CNfMCVW0otLynr2-E4WTfI-ww6Z2QV0NSe-LrYfVHpFCnfGf-XUNtQ31_9CJna40ifv67fKRnKfoDnKAg==")
+INFLUX_TOKEN = os.getenv(
+    "INFLUX_TOKEN",
+    "6gVj-CNfMCVW0otLynr2-E4WTfI-ww6Z2QV0NSe-LrYfVHpFCnfGf-XUNtQ31_9CJna40ifv67fKRnKfoDnKAg=="
+)
 INFLUX_ORG = os.getenv("INFLUX_ORG", "iot_lab")
 INFLUX_BUCKET = os.getenv("INFLUX_BUCKET", "energy_data")
 
