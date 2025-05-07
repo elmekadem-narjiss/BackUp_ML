@@ -315,8 +315,14 @@ jobs:
           black .
           # Check formatting
           black --check .
-          # Lint only project files, excluding virtual environment
-          flake8 Backend tests --max-line-length=88 --extend-ignore=E203 --exclude venv
+          # Lint project files, excluding virtual environment
+          if [ -d tests ] && [ "$(ls -A tests)" ]; then
+            echo "Linting Backend and tests directories"
+            flake8 Backend tests --max-line-length=88 --extend-ignore=E203 --exclude venv
+          else
+            echo "Warning: tests directory is empty or missing, linting only Backend"
+            flake8 Backend --max-line-length=88 --extend-ignore=E203 --exclude venv
+          fi
         shell: bash
 
       - name: Download BESSBatteryEnv script
