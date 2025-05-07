@@ -9,7 +9,7 @@ on:
     branches: [main]
 
 env:
-  MLFLOW_URL: https://e6b5-105-155-17-146.ngrok-free.app/
+  MLFLOW_URL: https://84b9-41-140-86-86.ngrok-free.app/
   PUSHGATEWAY_URL: https://8324-105-155-17-146.ngrok-free.app
 
 jobs:
@@ -31,7 +31,6 @@ jobs:
           key: ${{ runner.os }}-venv-${{ hashFiles('Backend/requirements.txt') }}
           restore-keys: |
             ${{ runner.os }}-venv-
-
       - name: Verify requirements.txt
         run: |
           if [ ! -f Backend/requirements.txt ]; then
@@ -182,7 +181,7 @@ jobs:
           if [ -f output/ppo_bess_model_metrics.json ]; then
             echo "Fichier ppo_bess_model_metrics.json trouvé. Contenu :"
             cat output/ppo_bess_model_metrics.json | jq . || echo "Erreur : ppo_bess_model_metrics.json n'est pas un JSON valide"
-            TRAIN_METRICS=$(cat output/ppo_bess_model_metrics.json | jq -r 'to_entries[] | .key + aptly "{run=\"ppo_training\",job=\"ppo_metrics\"} " + (.value | tostring)')
+            TRAIN_METRICS=$(cat output/ppo_bess_model_metrics.json | jq -r 'to_entries[] | .key + "{run=\"ppo_training\",job=\"ppo_metrics\"} " + (.value | tostring)')
             if [ -z "$TRAIN_METRICS" ]; then
               echo "Erreur : Aucune métrique trouvée dans ppo_bess_model_metrics.json"
               exit 1
@@ -251,12 +250,15 @@ jobs:
 
       - name: Notify on build results
         if: always()
-        run: |
-          curl -X POST -H 'Content-type: application/json' \
-          --data "{\"text\": \"Build job for ${{ github.repository }} completed.\nStatus: ${{ job.status }}\nRun: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}\"}" \
-          ${{ secrets.SLACK_WEBHOOK_URL }}
-        shell: bash
-
+        uses: slackapi/slack-github-action@v1.23.0
+        env:
+          SLACK_BOT_TOKEN: ${{ secrets.SLACK_BOT_TOKEN }}
+        with:
+          channel-id: 'ci-notifications'
+          slack-message: |
+            Build job for ${{ github.repository }} completed.
+            Status: ${{ job.status }}
+            Run: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
       - name: Record build workflow metrics
         run: |
           START_TIME=$(date +%s)
@@ -284,7 +286,6 @@ jobs:
           key: ${{ runner.os }}-venv-${{ hashFiles('Backend/requirements.txt') }}
           restore-keys: |
             ${{ runner.os }}-venv-
-
       - name: Verify requirements.txt
         run: |
           if [ ! -f Backend/requirements.txt ]; then
@@ -318,11 +319,11 @@ jobs:
           echo "Skipping black formatting check to avoid reformatting files"
           # Lint with relaxed rules for integration testing
           if [ -d tests ] && [ "$(ls -A tests)" ]; then
-            echo "Linting Backend and root tests directories with relaxed rules"
-            flake8 Backend tests --max-line-length=88 --extend-ignore=E203,E501,F841,F401,E402,W291,E302,W293,E305,E231,E265,W292,E303 --exclude venv,Backend/tests
+              echo "Linting Backend and root tests directories with relaxed rules"
+              flake8 Backend tests --max-line-length=88 --extend-ignore=E203,E501,F841,F401,E402,W291,E302,W293,E305,E231,E265,W292,E303 --exclude venv,Backend/tests
           else
-            echo "Warning: root tests directory is empty or missing, linting only Backend with relaxed rules"
-            flake8 Backend --max-line-length=88 --extend-ignore=E203,E501,F841,F401,E402,W291,E302,W293,E305,E231,E265,W292,E303 --exclude venv,Backend/tests
+              echo "Warning: root tests directory is empty or missing, linting only Backend with relaxed rules"
+              flake8 Backend --max-line-length=88 --extend-ignore=E203,E501,F841,F401,E402,W291,E302,W293,E305,E231,E265,W292,E303 --exclude venv,Backend/tests
           fi
         shell: bash
 
@@ -375,15 +376,17 @@ jobs:
             test-results.xml
             report.html
             *.log
-
       - name: Notify on test results
         if: always()
-        run: |
-          curl -X POST -H 'Content-type: application/json' \
-          --data "{\"text\": \"Integration test for ${{ github.repository }} completed.\nStatus: ${{ job.status }}\nRun: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}\"}" \
-          ${{ secrets.SLACK_WEBHOOK_URL }}
-        shell: bash
-
+        uses: slackapi/slack-github-action@v1.23.0
+        env:
+          SLACK_BOT_TOKEN: ${{ secrets.SLACK_BOT_TOKEN }}
+        with:
+          channel-id: 'ci-notifications'
+          slack-message: |
+            Integration test for ${{ github.repository }} completed.
+            Status: ${{ job.status }}
+            Run: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
       - name: Record workflow metrics
         run: |
           START_TIME=$(date +%s)
