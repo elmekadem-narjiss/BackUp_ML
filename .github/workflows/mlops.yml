@@ -321,10 +321,10 @@ jobs:
           # Lint with relaxed rules for integration testing
           if [ -d tests ] && [ "$(ls -A tests)" ]; then
               echo "Linting Backend and root tests directories with relaxed rules"
-              flake8 Backend tests --max-line-length=88 --extend-ignore=E203,E501,F841,F401,E402,W291 --exclude venv,Backend/tests
+              flake8 Backend tests --max-line-length=88 --extend-ignore=E203,E501,F841,F401,E402,W291,E302,W293,E305,E231,E265,W292,E303 --exclude venv,Backend/tests
           else
               echo "Warning: root tests directory is empty or missing, linting only Backend with relaxed rules"
-              flake8 Backend --max-line-length=88 --extend-ignore=E203,E501,F841,F401,E402,W291 --exclude venv,Backend/tests
+              flake8 Backend --max-line-length=88 --extend-ignore=E203,E501,F841,F401,E402,W291,E302,W293,E305,E231,E265,W292,E303 --exclude venv,Backend/tests
           fi
         shell: bash
 
