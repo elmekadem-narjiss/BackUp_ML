@@ -1,0 +1,36 @@
+rule all:
+    input:
+        "output/ppo_bess_model_metrics.json",
+        "output/evaluation_metrics.json",
+        "output/ppo_pipeline_executed.ipynb"
+
+rule download_data:
+    output:
+        "lstm_predictions_charger.csv"
+    shell:
+        """
+        python download_file.py
+        """
+
+rule execute_notebook:
+    input:
+        notebook="ppo_pipeline.ipynb",
+        data="lstm_predictions_charger.csv"
+    output:
+        "output/ppo_pipeline_executed.ipynb",
+        "output/ppo_bess_model_metrics.json",
+        "output/evaluation_metrics.json"
+    params:
+        mlflow_url="{env.MLFLOW_URL}",
+        pushgateway_url="{env.PUSHGATEWAY_URL}",
+        output_dir="output",
+        file_path="lstm_predictions_charger.csv"
+    shell:
+        """
+        python -m papermill {input.notebook} {output[0]} \
+            -p MLFLOW_URL {params.mlflow_url} \
+            -p PUSHGATEWAY_URL {params.pushgateway_url} \
+            -p output_dir {params.output_dir} \
+            -p file_path {params.file_path} \
+            --kernel python3
+        """
