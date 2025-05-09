@@ -96,9 +96,11 @@ jobs:
           fi
           echo "Backend/config.yaml found"
           cat Backend/config.yaml
-          # Vérifier que les champs nécessaires existent
-          PUSHGATEWAY_URL=$(yq e '.pushgateway.url' Backend/config.yaml)
-          MLFLOW_URL=$(yq e '.mlflow.url' Backend/config.yaml)
+          # Vérifier la version de yq
+          yq --version || echo "Erreur : Impossible de vérifier la version de yq"
+          # Vérifier que les champs nécessaires existent avec la syntaxe compatible yq 2.x
+          PUSHGATEWAY_URL=$(yq .pushgateway.url Backend/config.yaml)
+          MLFLOW_URL=$(yq .mlflow.url Backend/config.yaml)
           if [ -z "$PUSHGATEWAY_URL" ]; then
             echo "Erreur : pushgateway.url non défini dans config.yaml"
             exit 1
@@ -128,7 +130,7 @@ jobs:
       - name: Check PushGateway accessibility
         run: |
           source venv/bin/activate
-          PUSHGATEWAY_URL=$(yq e '.pushgateway.url' Backend/config.yaml)
+          PUSHGATEWAY_URL=$(yq .pushgateway.url Backend/config.yaml)
           echo "Vérification de l'accessibilité de la PushGateway : $PUSHGATEWAY_URL"
           echo "Envoi de la métrique de test vers $PUSHGATEWAY_URL/metrics/job/mlflow_and_snakemake_metrics"
           STATUS=$(echo "test_accessibility{job=\"mlflow_and_snakemake_metrics\"} 1" | curl -s -L -w "%{http_code}" --data-binary @- $PUSHGATEWAY_URL/metrics/job/mlflow_and_snakemake_metrics -o /dev/null)
@@ -161,7 +163,7 @@ jobs:
             [mse]=0.005455112014267468
             [scale]=1
           )
-          PUSHGATEWAY_URL=$(yq e '.pushgateway.url' Backend/config.yaml)
+          PUSHGATEWAY_URL=$(yq .pushgateway.url Backend/config.yaml)
           echo "Envoi des métriques metrics_92f5..."
           for key in "${!metrics_92f5[@]}"; do
             value=${metrics_92f5[$key]}
@@ -238,7 +240,7 @@ jobs:
       - name: Push global success metric to Prometheus
         run: |
           source venv/bin/activate
-          PUSHGATEWAY_URL=$(yq e '.pushgateway.url' Backend/config.yaml)
+          PUSHGATEWAY_URL=$(yq .pushgateway.url Backend/config.yaml)
           STATUS=$(echo "success{job=\"mlflow_and_snakemake_metrics\"} 1" | curl -s -L -w "%{http_code}" --data-binary @- $PUSHGATEWAY_URL/metrics/job/mlflow_and_snakemake_metrics -o /dev/null)
           if [ "$STATUS" -eq 200 ]; then
             echo "Succès : Métrique success envoyée, code HTTP $STATUS"
@@ -251,7 +253,7 @@ jobs:
       - name: Check metrics in PushGateway
         run: |
           source venv/bin/activate
-          PUSHGATEWAY_URL=$(yq e '.pushgateway.url' Backend/config.yaml)
+          PUSHGATEWAY_URL=$(yq .pushgateway.url Backend/config.yaml)
           echo "🔍 Vérification des métriques dans PushGateway..."
           curl -s -L $PUSHGATEWAY_URL/metrics | grep -E 'scale|loss|mae|mse|aic|bic|llf|r2_score|rmse|df_model|df_resid|success|avg_reward|avg_cycles|avg_accuracy|total_reward|cycles|accuracy' || echo "⚠️ Pas de métriques visibles"
         shell: bash
@@ -284,7 +286,7 @@ jobs:
           START_TIME=$(date +%s)
           END_TIME=$(date +%s)
           DURATION=$((END_TIME - START_TIME))
-          PUSHGATEWAY_URL=$(yq e '.pushgateway.url' Backend/config.yaml)
+          PUSHGATEWAY_URL=$(yq .pushgateway.url Backend/config.yaml)
           echo "workflow_duration{job=\"build\",repository=\"${{ github.repository }}\"} $DURATION" | curl -s -L --data-binary @- $PUSHGATEWAY_URL/metrics/job/workflow_metrics
         shell: bash
 
@@ -411,7 +413,7 @@ jobs:
           START_TIME=$(date +%s)
           END_TIME=$(date +%s)
           DURATION=$((END_TIME - START_TIME))
-          PUSHGATEWAY_URL=$(yq e '.pushgateway.url' Backend/config.yaml)
+          PUSHGATEWAY_URL=$(yq .pushgateway.url Backend/config.yaml)
           echo "workflow_duration{job=\"integration_test\",repository=\"${{ github.repository }}\"} $DURATION" | curl -s -L --data-binary @- $PUSHGATEWAY_URL/metrics/job/workflow_metrics
         shell: bash
 
@@ -501,6 +503,6 @@ jobs:
           START_TIME=$(date +%s)
           END_TIME=$(date +%s)
           DURATION=$((END_TIME - START_TIME))
-          PUSHGATEWAY_URL=$(yq e '.pushgateway.url' Backend/config.yaml)
+          PUSHGATEWAY_URL=$(yq .pushgateway.url Backend/config.yaml)
           echo "workflow_duration{job=\"deploy\",repository=\"${{ github.repository }}\"} $DURATION" | curl -s -L --data-binary @- $PUSHGATEWAY_URL/metrics/job/workflow_metrics
         shell: bash
