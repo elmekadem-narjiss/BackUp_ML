@@ -1,4 +1,4 @@
- name: MLFlow and Snakemake Workflow
+   name: MLFlow and Snakemake Workflow
 
    on:
      schedule:
