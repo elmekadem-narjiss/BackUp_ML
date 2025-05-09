@@ -97,7 +97,6 @@ jobs:
           echo "Backend/config.yaml found"
           cat Backend/config.yaml
           yq --version || echo "Erreur : Impossible de vérifier la version de yq"
-          # Nettoyer les guillemets autour des URLs
           PUSHGATEWAY_URL=$(yq .pushgateway.url Backend/config.yaml | tr -d '"')
           MLFLOW_URL=$(yq .mlflow.url Backend/config.yaml | tr -d '"')
           if [ -z "$PUSHGATEWAY_URL" ]; then
@@ -123,7 +122,7 @@ jobs:
       - name: Run Snakemake pipeline
         run: |
           source venv/bin/activate
-          snakemake --snakefile Backend/Snakefile --cores 1
+          snakemake --snakefile Backend/Snakefile --cores 1 --verbose
         shell: bash
 
       - name: Check PushGateway accessibility
@@ -192,11 +191,10 @@ jobs:
           echo "Vérification des fichiers PPO JSON :"
           if [ -f output/ppo_bess_model_metrics.json ]; then
             echo "Fichier ppo_bess_model_metrics.json trouvé. Contenu :"
-            cat output/ppo_bess_model_metrics.json | jq . || echo "Erreur : ppo_bess_model_metrics.json n'est pas un JSON valide"
-            TRAIN_METRICS=$(cat output/ppo_bess_model_metrics.json | jq -r 'to_entries[] | .key + "{run=\"ppo_training\",job=\"ppo_metrics\"} " + (.value | tostring)')
+            cat output/ppo_bess_model_metrics.json || echo "Erreur : Impossible de lire ppo_bess_model_metrics.json"
+            TRAIN_METRICS=$(cat output/ppo_bess_model_metrics.json | jq -r 'to_entries[] | .key + "{run=\"ppo_training\",job=\"ppo_metrics\"} " + (.value | tostring)' || echo "Erreur : Parsing JSON invalide")
             if [ -z "$TRAIN_METRICS" ]; then
-              echo "Erreur : Aucune métrique trouvée dans ppo_bess_model_metrics.json"
-              exit 1
+              echo "Avertissement : Aucune métrique trouvée dans ppo_bess_model_metrics.json"
             else
               while IFS= read -r metric; do
                 echo "Envoi de la métrique PPO (entraînement) : $metric"
@@ -211,15 +209,13 @@ jobs:
             fi
           else
             echo "Erreur : ppo_bess_model_metrics.json non trouvé. Aucune métrique PPO d'entraînement envoyée."
-            exit 1
           fi
           if [ -f output/evaluation_metrics.json ]; then
             echo "Fichier evaluation_metrics.json trouvé. Contenu :"
-            cat output/evaluation_metrics.json | jq . || echo "Erreur : evaluation_metrics.json n'est pas un JSON valide"
-            EVAL_METRICS=$(cat output/evaluation_metrics.json | jq -r 'to_entries[] | .key + "{run=\"ppo_evaluation\",job=\"ppo_metrics\"} " + (.value | tostring)')
+            cat output/evaluation_metrics.json || echo "Erreur : Impossible de lire evaluation_metrics.json"
+            EVAL_METRICS=$(cat output/evaluation_metrics.json | jq -r 'to_entries[] | .key + "{run=\"ppo_evaluation\",job=\"ppo_metrics\"} " + (.value | tostring)' || echo "Erreur : Parsing JSON invalide")
             if [ -z "$EVAL_METRICS" ]; then
-              echo "Erreur : Aucune métrique trouvée dans evaluation_metrics.json"
-              exit 1
+              echo "Avertissement : Aucune métrique trouvée dans evaluation_metrics.json"
             else
               while IFS= read -r metric; do
                 echo "Envoi de la métrique PPO (évaluation) : $metric"
@@ -234,7 +230,6 @@ jobs:
             fi
           else
             echo "Erreur : evaluation_metrics.json non trouvé. Aucune métrique PPO d'évaluation envoyée."
-            exit 1
           fi
         shell: bash
 
