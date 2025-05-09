@@ -349,6 +349,25 @@ jobs:
           pip install pytest flake8 pandas
         shell: bash
 
+      - name: Verify config.yaml
+        run: |
+          if [ ! -f Backend/config.yaml ]; then
+            echo "Error: Backend/config.yaml not found"
+            ls -R Backend/
+            exit 1
+          fi
+          echo "Backend/config.yaml found"
+          cat Backend/config.yaml
+          PUSHGATEWAY_URL=$(yq .pushgateway.url Backend/config.yaml | tr -d '"')
+          if [ -z "$PUSHGATEWAY_URL" ]; then
+            echo "Erreur : pushgateway.url non défini dans config.yaml"
+            exit 1
+          fi
+          echo "PUSHGATEWAY_URL: $PUSHGATEWAY_URL"
+          echo "Exporting variables for subsequent steps..."
+          echo "PUSHGATEWAY_URL=$PUSHGATEWAY_URL" >> $GITHUB_ENV
+        shell: bash
+
       - name: Check tests directory structure
         run: |
           echo "Checking directory structure for tests..."
