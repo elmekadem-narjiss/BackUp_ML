@@ -1,4 +1,5 @@
 from pathlib import Path
+import os
 import yaml
 
 # Charger la configuration depuis config.yaml
@@ -14,6 +15,7 @@ rule check_config:
             raise FileNotFoundError("Backend/config.yaml not found")
         with open(output[0], "w") as f:
             f.write("Configuration vérifiée avec succès")
+        print("Configuration vérifiée avec succès")
 
 # Règle pour télécharger les données
 rule download_data:
@@ -21,7 +23,8 @@ rule download_data:
         "lstm_predictions_charger.csv"
     shell:
         """
-        python Backend/download_file.py --file-name {config[data][file_name]}
+        echo "Téléchargement du fichier avec download_file.py..."
+        python Backend/download_file.py || { echo "Erreur lors du téléchargement"; exit 1; }
         ls -l {output} || { echo "Erreur : {output} non créé"; exit 1; }
         """
 
@@ -29,8 +32,7 @@ rule download_data:
 rule execute_notebook:
     input:
         notebook="ppo_pipeline.ipynb",
-        data="lstm_predictions_charger.csv",
-        config_check="config_verified.txt"
+        data="lstm_predictions_charger.csv"
     output:
         "output/ppo_pipeline_executed.ipynb",
         "output/ppo_bess_model_metrics.json",
@@ -39,7 +41,7 @@ rule execute_notebook:
         mlflow_url=config["mlflow"]["url"],
         pushgateway_url=config["pushgateway"]["url"],
         output_dir="output",
-        file_path=config["data"]["file_path"]
+        file_path="lstm_predictions_charger.csv"
     shell:
         """
         echo "Exécution de Papermill avec :"
@@ -52,7 +54,7 @@ rule execute_notebook:
             -p PUSHGATEWAY_URL {params.pushgateway_url} \
             -p output_dir {params.output_dir} \
             -p file_path {params.file_path} \
-            --kernel python3 || { echo "Erreur lors de l'exécution de Papermill"; exit 1; }
+            --kernel python3 --log-output --log-level DEBUG || { echo "Erreur lors de l'exécution de Papermill"; exit 1; }
         ls -l {output[0]} {output[1]} {output[2]} || { echo "Erreur : Un ou plusieurs fichiers de sortie non créés"; exit 1; }
         echo "Contenu de {output[1]} :"
         cat {output[1]} || echo "Erreur : Impossible de lire {output[1]}"
