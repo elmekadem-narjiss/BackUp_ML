@@ -44,8 +44,10 @@ rule train_model:
         """
         source venv/bin/activate
         echo "Exécution de train_ppo.py avec input: {input}"
-        python Backend/train_ppo.py --input {input} --output {output} || echo "Erreur lors de l'exécution de train_ppo.py"
-        ls -l {output} || echo "Erreur : {output} non créé"
+        python Backend/train_ppo.py --input {input} --output {output} || { echo "Erreur lors de l'exécution de train_ppo.py, vérifiez les logs"; exit 1; }
+        ls -l {output} || { echo "Erreur : {output} non créé"; exit 1; }
+        echo "Contenu de {output} :"
+        cat {output} || echo "Erreur : Impossible de lire {output}"
         """
 
 # Règle principale
