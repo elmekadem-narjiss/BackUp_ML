@@ -368,8 +368,8 @@ jobs:
           else
             echo "Warning: root tests directory is empty or missing, linting only Backend with relaxed rules"
             flake8 Backend --max-line-length=88 --extend-ignore=E203,E501,F841,F401,E402,W291,E302,W293,E305,E231,E265,W292,E303 --exclude venv,Backend/tests
-        fi
-      shell: bash
+          fi
+        shell: bash
 
       - name: Download BESSBatteryEnv script
         run: |
