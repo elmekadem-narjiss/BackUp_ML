@@ -30,6 +30,8 @@ rule download_data:
     shell:
         """
         python Backend/download_file.py --file-name {params.file_name} --output {output}
+        echo "Téléchargement terminé, vérification de {output}"
+        ls -l {output} || echo "Erreur : {output} non trouvé après téléchargement"
         """
 
 # Règle pour entraîner le modèle
@@ -41,7 +43,9 @@ rule train_model:
     shell:
         """
         source venv/bin/activate
-        snakemake --cores 1 train_ppo
+        echo "Exécution de train_ppo.py avec input: {input}"
+        python Backend/train_ppo.py --input {input} --output {output} || echo "Erreur lors de l'exécution de train_ppo.py"
+        ls -l {output} || echo "Erreur : {output} non créé"
         """
 
 # Règle principale
