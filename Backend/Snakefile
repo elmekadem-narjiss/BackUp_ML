@@ -1,5 +1,4 @@
 from pathlib import Path
-import requests
 import os
 import yaml
 
@@ -7,34 +6,30 @@ import yaml
 with open("config.yaml", "r") as f:
     config = yaml.safe_load(f)
 
-# Règle pour vérifier la disponibilité des données
-rule check_data_availability:
+# Règle pour vérifier la disponibilité des fichiers locaux nécessaires
+rule check_requirements:
     output:
-        "data/availability_check.txt"
-    params:
-        url=config["data"]["google_drive_url"]
+        "data/requirements_check.txt"
     run:
-        try:
-            response = requests.head(params.url, timeout=10)
-            if response.status_code == 200:
-                with open(output[0], "w") as f:
-                    f.write(f"Données disponibles depuis {params.url}")
-            else:
-                raise Exception(f"Erreur: Statut HTTP {response.status_code}")
-        except requests.exceptions.RequestException as e:
-            raise Exception(f"Échec de la vérification des données: {e}")
+        # Vérifier si les fichiers d'authentification Google Drive existent
+        required_files = ["client_secrets.json", "token.json"]
+        missing_files = [f for f in required_files if not os.path.exists(f)]
+        if missing_files:
+            raise Exception(f"Fichiers manquants : {missing_files}")
+        with open(output[0], "w") as f:
+            f.write("Tous les fichiers nécessaires sont présents")
 
 # Règle pour télécharger les données
 rule download_data:
     input:
-        "data/availability_check.txt"
+        "data/requirements_check.txt"
     output:
         "data/raw_data.csv"
     params:
-        url=config["data"]["google_drive_url"]
+        file_name=config["data"]["file_name"]
     shell:
         """
-        python Backend/download_file.py --url {params.url} --output {output}
+        python Backend/download_file.py --file-name {params.file_name} --output {output}
         """
 
 # Règle pour entraîner le modèle
