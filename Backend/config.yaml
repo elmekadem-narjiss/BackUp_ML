@@ -1,0 +1,6 @@
+data:
+  file_name: "lstm_predictions_charger.csv"  # Nom du fichier à télécharger depuis Google Drive
+  priority_tasks:
+    - ppo_training  # Priorité 1 : Entraînement PPO
+    - lstm_prediction  # Priorité 2 : Prédictions LSTM
+    - sarimax_evaluation  # Priorité 3 : Évaluation SARIMAX
