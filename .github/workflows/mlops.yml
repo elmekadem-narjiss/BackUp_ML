@@ -10,7 +10,7 @@ on:
 
 env:
   MLFLOW_URL: https://c7db-41-142-107-118.ngrok-free.app/
-  PUSHGATEWAY_URL: https://116a-41-142-107-118.ngrok-free.app
+  PUSHGATEWAY_URL: https://116a-41-142-107-118.ngrok-free.app/
 
 jobs:
   build:
@@ -49,10 +49,12 @@ jobs:
           source venv/bin/activate
           pip install --upgrade pip
           pip install -r Backend/requirements.txt
-          pip install snakemake papermill google-api-python-client
+          pip install snakemake papermill google-api-python-client mlflow
           pip list | grep ipykernel || { echo "Erreur : ipykernel non installé"; exit 1; }
           pip list | grep google-api-python-client || { echo "Erreur : google-api-python-client non installé"; exit 1; }
           pip list | grep snakemake || { echo "Erreur : snakemake non installé"; exit 1; }
+          pip list | grep papermill || { echo "Erreur : papermill non installé"; exit 1; }
+          pip list | grep mlflow || { echo "Erreur : mlflow non installé"; exit 1; }
         shell: bash
 
       - name: Install Jupyter kernel
@@ -240,9 +242,7 @@ jobs:
 
       - name: Prepare and upload build artifacts
         run: |
-          # Créer un répertoire temporaire pour les artefacts
           mkdir -p artifacts
-          # Copier les fichiers de output/ s'ils existent
           if ls output/* 2>/dev/null; then
             cp output/* artifacts/
             echo "Fichiers de output/ copiés dans artifacts/"
@@ -251,7 +251,6 @@ jobs:
             echo "Avertissement : Aucun fichier dans output/, ajout d'un fichier placeholder"
             echo "Aucun fichier généré dans output/" > artifacts/placeholder.txt
           fi
-          # Ajouter ppo_pipeline.ipynb s'il existe
           if [ -f ppo_pipeline.ipynb ]; then
             cp ppo_pipeline.ipynb artifacts/
             echo "ppo_pipeline.ipynb copié dans artifacts/"
@@ -259,15 +258,12 @@ jobs:
             echo "Avertissement : ppo_pipeline.ipynb non trouvé"
             echo "Placeholder pour ppo_pipeline.ipynb" > artifacts/ppo_pipeline_placeholder.txt
           fi
-          # Vérifier le contenu du répertoire artifacts/
           ls -l artifacts/
-          # Uploader les artefacts
-          echo "Uploading artifacts..."
-          actions/upload-artifact@v4
+        - name: Upload artifacts
+          uses: actions/upload-artifact@v4
           with:
             name: build-artifacts
             path: artifacts/*
-        shell: bash
 
       - name: Notify on build results
         if: always()
@@ -280,7 +276,6 @@ jobs:
       - name: Record build workflow metrics
         run: |
           START_TIME=$(date +%s)
-          # Simulate build execution (already done in previous steps)
           END_TIME=$(date +%s)
           DURATION=$((END_TIME - START_TIME))
           echo "workflow_duration{job=\"build\",repository=\"${{ github.repository }}\"} $DURATION" | curl -s -L --data-binary @- $PUSHGATEWAY_URL/metrics/job/workflow_metrics
@@ -334,9 +329,7 @@ jobs:
       - name: Lint and format code
         run: |
           source venv/bin/activate
-          # Skip black formatting check for integration testing
           echo "Skipping black formatting check to avoid reformatting files"
-          # Lint with relaxed rules for integration testing
           if [ -d tests ] && [ "$(ls -A tests)" ]; then
             echo "Linting Backend and root tests directories with relaxed rules"
             flake8 Backend tests --max-line-length=88 --extend-ignore=E203,E501,F841,F401,E402,W291,E302,W293,E305,E231,E265,W292,E303 --exclude venv,Backend/tests
@@ -420,7 +413,6 @@ jobs:
       - name: Record workflow metrics
         run: |
           START_TIME=$(date +%s)
-          # Simulate test execution (already done in previous step)
           END_TIME=$(date +%s)
           DURATION=$((END_TIME - START_TIME))
           echo "workflow_duration{job=\"integration-test\",repository=\"${{ github.repository }}\"} $DURATION" | curl -s -L --data-binary @- $PUSHGATEWAY_URL/metrics/job/workflow_metrics
@@ -460,7 +452,6 @@ jobs:
           else
             echo "Avertissement : Dossier artifacts/ non trouvé"
           fi
-          # Create a simple index.html to list the files
           cat << 'EOF' > docs/index.html
           <!DOCTYPE html>
           <html>
@@ -500,7 +491,6 @@ jobs:
       - name: Record deploy workflow metrics
         run: |
           START_TIME=$(date +%s)
-          # Simulate deploy execution (already done in previous steps)
           END_TIME=$(date +%s)
           DURATION=$((END_TIME - START_TIME))
           echo "workflow_duration{job=\"deploy\",repository=\"${{ github.repository }}\"} $DURATION" | curl -s -L --data-binary @- $PUSHGATEWAY_URL/metrics/job/workflow_metrics
