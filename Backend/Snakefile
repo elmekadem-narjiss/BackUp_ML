@@ -9,8 +9,7 @@ rule download_data:
         "lstm_predictions_charger.csv"
     shell:
         """
-        python Backend/download_file.py
-        ls -l {output} || { echo "Erreur : {output} non créé"; exit 1; }
+        python download_file.py
         """
 
 rule execute_notebook:
@@ -28,20 +27,10 @@ rule execute_notebook:
         file_path="lstm_predictions_charger.csv"
     shell:
         """
-        echo "Exécution de Papermill avec les paramètres :"
-        echo "MLFLOW_URL: {params.mlflow_url}"
-        echo "PUSHGATEWAY_URL: {params.pushgateway_url}"
-        echo "Output dir: {params.output_dir}"
-        echo "File path: {params.file_path}"
         python -m papermill {input.notebook} {output[0]} \
             -p MLFLOW_URL {params.mlflow_url} \
             -p PUSHGATEWAY_URL {params.pushgateway_url} \
             -p output_dir {params.output_dir} \
             -p file_path {params.file_path} \
-            --kernel python3 || { echo "Erreur lors de l'exécution de Papermill"; exit 1; }
-        ls -l {output[0]} {output[1]} {output[2]} || { echo "Erreur : Un ou plusieurs fichiers de sortie non créés"; exit 1; }
-        echo "Contenu de {output[1]} :"
-        cat {output[1]} || echo "Erreur : Impossible de lire {output[1]}"
-        echo "Contenu de {output[2]} :"
-        cat {output[2]} || echo "Erreur : Impossible de lire {output[2]}"
+            --kernel python3
         """
