@@ -1,6 +1,7 @@
+mlflow:
+  url: https://c7db-41-142-107-118.ngrok-free.app/
+pushgateway:
+  url: https://116a-41-142-107-118.ngrok-free.app/
 data:
-  file_name: "lstm_predictions_charger.csv"  # Nom du fichier à télécharger depuis Google Drive
-  priority_tasks:
-    - ppo_training  # Priorité 1 : Entraînement PPO
-    - lstm_prediction  # Priorité 2 : Prédictions LSTM
-    - sarimax_evaluation  # Priorité 3 : Évaluation SARIMAX
+  file_name: lstm_predictions_charger.csv
+  file_path: lstm_predictions_charger.csv
