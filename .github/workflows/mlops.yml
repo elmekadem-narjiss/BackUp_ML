@@ -8,10 +8,6 @@ on:
   pull_request:
     branches: [main]
 
-env:
-  MLFLOW_URL: https://c7db-41-142-107-118.ngrok-free.app/
-  PUSHGATEWAY_URL: https://116a-41-142-107-118.ngrok-free.app
-
 jobs:
   build:
     runs-on: ubuntu-latest
@@ -31,6 +27,7 @@ jobs:
           key: ${{ runner.os }}-venv-${{ hashFiles('Backend/requirements.txt') }}
           restore-keys: |
             ${{ runner.os }}-venv-
+
       - name: Verify requirements.txt
         run: |
           if [ ! -f Backend/requirements.txt ]; then
@@ -48,10 +45,13 @@ jobs:
           source venv/bin/activate
           pip install --upgrade pip
           pip install -r Backend/requirements.txt
-          pip install snakemake papermill
+          pip install snakemake papermill google-api-python-client mlflow yq
           pip list | grep ipykernel || { echo "Erreur : ipykernel non installé"; exit 1; }
           pip list | grep google-api-python-client || { echo "Erreur : google-api-python-client non installé"; exit 1; }
           pip list | grep snakemake || { echo "Erreur : snakemake non installé"; exit 1; }
+          pip list | grep papermill || { echo "Erreur : papermill non installé"; exit 1; }
+          pip list | grep mlflow || { echo "Erreur : mlflow non installé"; exit 1; }
+          pip list | grep yq || { echo "Erreur : yq non installé"; exit 1; }
         shell: bash
 
       - name: Install Jupyter kernel
@@ -85,6 +85,17 @@ jobs:
           fi
         shell: bash
 
+      - name: Verify config.yaml
+        run: |
+          if [ ! -f Backend/config.yaml ]; then
+            echo "Error: Backend/config.yaml not found"
+            ls -R Backend/
+            exit 1
+          fi
+          echo "Backend/config.yaml found"
+          cat Backend/config.yaml
+        shell: bash
+
       - name: Download notebook and scripts
         run: |
           wget https://raw.githubusercontent.com/elmekadem-narjiss/BackUp_ML/refs/heads/main/Backend/ppo_pipeline.ipynb -O ppo_pipeline.ipynb
@@ -97,11 +108,12 @@ jobs:
       - name: Run Snakemake pipeline
         run: |
           source venv/bin/activate
-          snakemake --snakefile Backend/Snakefile --cores 1 --config mlflow_url=$MLFLOW_URL pushgateway_url=$PUSHGATEWAY_URL
+          snakemake --snakefile Backend/Snakefile --cores 1
         shell: bash
 
       - name: Check PushGateway accessibility
         run: |
+          PUSHGATEWAY_URL=$(cat Backend/config.yaml | yq e '.pushgateway.url' -)
           echo "Vérification de l'accessibilité de la PushGateway : $PUSHGATEWAY_URL"
           echo "Envoi de la métrique de test vers $PUSHGATEWAY_URL/metrics/job/mlflow_and_snakemake_metrics"
           STATUS=$(echo "test_accessibility{job=\"mlflow_and_snakemake_metrics\"} 1" | curl -s -L -w "%{http_code}" --data-binary @- $PUSHGATEWAY_URL/metrics/job/mlflow_and_snakemake_metrics -o /dev/null)
@@ -134,6 +146,7 @@ jobs:
             [mse]=0.005455112014267468
             [scale]=1
           )
+          PUSHGATEWAY_URL=$(cat Backend/config.yaml | yq e '.pushgateway.url' -)
           echo "Envoi des métriques metrics_92f5..."
           for key in "${!metrics_92f5[@]}"; do
             value=${metrics_92f5[$key]}
@@ -209,6 +222,7 @@ jobs:
 
       - name: Push global success metric to Prometheus
         run: |
+          PUSHGATEWAY_URL=$(cat Backend/config.yaml | yq e '.pushgateway.url' -)
           STATUS=$(echo "success{job=\"mlflow_and_snakemake_metrics\"} 1" | curl -s -L -w "%{http_code}" --data-binary @- $PUSHGATEWAY_URL/metrics/job/mlflow_and_snakemake_metrics -o /dev/null)
           if [ "$STATUS" -eq 200 ]; then
             echo "Succès : Métrique success envoyée, code HTTP $STATUS"
@@ -220,6 +234,7 @@ jobs:
 
       - name: Check metrics in PushGateway
         run: |
+          PUSHGATEWAY_URL=$(cat Backend/config.yaml | yq e '.pushgateway.url' -)
           echo "🔍 Vérification des métriques dans PushGateway..."
           curl -s -L $PUSHGATEWAY_URL/metrics | grep -E 'scale|loss|mae|mse|aic|bic|llf|r2_score|rmse|df_model|df_resid|success|avg_reward|avg_cycles|avg_accuracy|total_reward|cycles|accuracy' || echo "⚠️ Pas de métriques visibles"
         shell: bash
@@ -237,6 +252,7 @@ jobs:
             output/ppo_bess_model_metrics.json
             output/evaluation_metrics.json
             output/ppo_pipeline_executed.ipynb
+
       - name: Notify on build results
         if: always()
         run: |
@@ -248,9 +264,9 @@ jobs:
       - name: Record build workflow metrics
         run: |
           START_TIME=$(date +%s)
-          # Simulate build execution (already done in previous steps)
           END_TIME=$(date +%s)
           DURATION=$((END_TIME - START_TIME))
+          PUSHGATEWAY_URL=$(cat Backend/config.yaml | yq e '.pushgateway.url' -)
           echo "workflow_duration{job=\"build\",repository=\"${{ github.repository }}\"} $DURATION" | curl -s -L --data-binary @- $PUSHGATEWAY_URL/metrics/job/workflow_metrics
         shell: bash
 
@@ -272,6 +288,7 @@ jobs:
           key: ${{ runner.os }}-venv-${{ hashFiles('Backend/requirements.txt') }}
           restore-keys: |
             ${{ runner.os }}-venv-
+
       - name: Verify requirements.txt
         run: |
           if [ ! -f Backend/requirements.txt ]; then
@@ -289,6 +306,7 @@ jobs:
           source venv/bin/activate
           pip install --upgrade pip
           pip install -r Backend/requirements.txt
+          pip install yq
         shell: bash
 
       - name: Check tests directory structure
@@ -301,9 +319,7 @@ jobs:
       - name: Lint and format code
         run: |
           source venv/bin/activate
-          # Skip black formatting check for integration testing
           echo "Skipping black formatting check to avoid reformatting files"
-          # Lint with relaxed rules for integration testing
           if [ -d tests ] && [ "$(ls -A tests)" ]; then
             echo "Linting Backend and root tests directories with relaxed rules"
             flake8 Backend tests --max-line-length=88 --extend-ignore=E203,E501,F841,F401,E402,W291,E302,W293,E305,E231,E265,W292,E303 --exclude venv,Backend/tests
@@ -362,6 +378,7 @@ jobs:
             test-results.xml
             report.html
             *.log
+
       - name: Notify on test results
         if: always()
         run: |
@@ -373,9 +390,9 @@ jobs:
       - name: Record workflow metrics
         run: |
           START_TIME=$(date +%s)
-          # Simulate test execution (already done in previous step)
           END_TIME=$(date +%s)
           DURATION=$((END_TIME - START_TIME))
+          PUSHGATEWAY_URL=$(cat Backend/config.yaml | yq e '.pushgateway.url' -)
           echo "workflow_duration{job=\"integration_test\",repository=\"${{ github.repository }}\"} $DURATION" | curl -s -L --data-binary @- $PUSHGATEWAY_URL/metrics/job/workflow_metrics
         shell: bash
 
@@ -387,6 +404,18 @@ jobs:
         uses: actions/checkout@v3
         with:
           fetch-depth: 0  # Fetch all history for proper git operations
+
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.9'
+
+      - name: Install yq
+        run: |
+          python -m venv venv
+          source venv/bin/activate
+          pip install yq
+        shell: bash
 
       - name: Download build artifacts
         uses: actions/download-artifact@v4
@@ -411,7 +440,6 @@ jobs:
           cp artifacts/ppo_bess_model_metrics.json docs/
           cp artifacts/evaluation_metrics.json docs/
           cp artifacts/ppo_pipeline_executed.ipynb docs/
-          # Create a simple index.html to list the files
           cat << 'EOF' > docs/index.html
           <!DOCTYPE html>
           <html>
@@ -451,8 +479,8 @@ jobs:
       - name: Record deploy workflow metrics
         run: |
           START_TIME=$(date +%s)
-          # Simulate deploy execution (already done in previous steps)
           END_TIME=$(date +%s)
           DURATION=$((END_TIME - START_TIME))
+          PUSHGATEWAY_URL=$(cat Backend/config.yaml | yq e '.pushgateway.url' -)
           echo "workflow_duration{job=\"deploy\",repository=\"${{ github.repository }}\"} $DURATION" | curl -s -L --data-binary @- $PUSHGATEWAY_URL/metrics/job/workflow_metrics
         shell: bash
