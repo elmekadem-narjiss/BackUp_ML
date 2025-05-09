@@ -1,36 +1,55 @@
+from pathlib import Path
+import requests
+import os
+import yaml
+
+# Charger la configuration
+with open("config.yaml", "r") as f:
+    config = yaml.safe_load(f)
+
+# Règle pour vérifier la disponibilité des données
+rule check_data_availability:
+    output:
+        "data/availability_check.txt"
+    params:
+        url=config["data"]["google_drive_url"]
+    run:
+        try:
+            response = requests.head(params.url, timeout=10)
+            if response.status_code == 200:
+                with open(output[0], "w") as f:
+                    f.write(f"Données disponibles depuis {params.url}")
+            else:
+                raise Exception(f"Erreur: Statut HTTP {response.status_code}")
+        except requests.exceptions.RequestException as e:
+            raise Exception(f"Échec de la vérification des données: {e}")
+
+# Règle pour télécharger les données
+rule download_data:
+    input:
+        "data/availability_check.txt"
+    output:
+        "data/raw_data.csv"
+    params:
+        url=config["data"]["google_drive_url"]
+    shell:
+        """
+        python Backend/download_file.py --url {params.url} --output {output}
+        """
+
+# Règle pour entraîner le modèle
+rule train_model:
+    input:
+        "data/raw_data.csv"
+    output:
+        "output/ppo_bess_model_metrics.json"
+    shell:
+        """
+        source venv/bin/activate
+        snakemake --cores 1 train_ppo
+        """
+
+# Règle principale
 rule all:
     input:
-        "output/ppo_bess_model_metrics.json",
-        "output/evaluation_metrics.json",
-        "output/ppo_pipeline_executed.ipynb"
-
-rule download_data:
-    output:
-        "lstm_predictions_charger.csv"
-    shell:
-        """
-        python download_file.py
-        """
-
-rule execute_notebook:
-    input:
-        notebook="ppo_pipeline.ipynb",
-        data="lstm_predictions_charger.csv"
-    output:
-        "output/ppo_pipeline_executed.ipynb",
-        "output/ppo_bess_model_metrics.json",
-        "output/evaluation_metrics.json"
-    params:
-        mlflow_url="{env.MLFLOW_URL}",
-        pushgateway_url="{env.PUSHGATEWAY_URL}",
-        output_dir="output",
-        file_path="lstm_predictions_charger.csv"
-    shell:
-        """
-        python -m papermill {input.notebook} {output[0]} \
-            -p MLFLOW_URL {params.mlflow_url} \
-            -p PUSHGATEWAY_URL {params.pushgateway_url} \
-            -p output_dir {params.output_dir} \
-            -p file_path {params.file_path} \
-            --kernel python3
-        """
+        "output/ppo_bess_model_metrics.json"
