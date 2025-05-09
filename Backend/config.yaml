@@ -1,7 +1,7 @@
 mlflow:
-  url: https://c7db-41-142-107-118.ngrok-free.app/
+  url: https://958e-41-248-129-38.ngrok-free.app/
 pushgateway:
-  url: https://116a-41-142-107-118.ngrok-free.app
+  url: https://301a-41-248-129-38.ngrok-free.app
 data:
   file_name: lstm_predictions_charger.csv
   file_path: 1fJM376Icrrs9Ww86IN4-4DJw2w-faLoO
