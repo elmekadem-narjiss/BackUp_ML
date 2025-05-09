@@ -1,34 +1,17 @@
-from pathlib import Path
-import os
-import yaml
+rule all:
+    input:
+        "output/ppo_bess_model_metrics.json",
+        "output/evaluation_metrics.json",
+        "output/ppo_pipeline_executed.ipynb"
 
-# Charger la configuration depuis config.yaml
-with open("Backend/config.yaml", "r") as f:
-    config = yaml.safe_load(f)
-
-# Règle pour vérifier la présence de config.yaml
-rule check_config:
-    output:
-        "config_verified.txt"
-    run:
-        if not Path("Backend/config.yaml").is_file():
-            raise FileNotFoundError("Backend/config.yaml not found")
-        with open(output[0], "w") as f:
-            f.write("Configuration vérifiée avec succès")
-        print("Configuration vérifiée avec succès")
-
-# Règle pour télécharger les données
 rule download_data:
     output:
         "lstm_predictions_charger.csv"
     shell:
         """
-        echo "Téléchargement du fichier avec download_file.py..."
-        python Backend/download_file.py || { echo "Erreur lors du téléchargement"; exit 1; }
-        ls -l {output} || { echo "Erreur : {output} non créé"; exit 1; }
+        python download_file.py
         """
 
-# Règle pour exécuter le notebook
 rule execute_notebook:
     input:
         notebook="ppo_pipeline.ipynb",
@@ -38,33 +21,16 @@ rule execute_notebook:
         "output/ppo_bess_model_metrics.json",
         "output/evaluation_metrics.json"
     params:
-        mlflow_url=config["mlflow"]["url"],
-        pushgateway_url=config["pushgateway"]["url"],
+        mlflow_url="{env.MLFLOW_URL}",
+        pushgateway_url="{env.PUSHGATEWAY_URL}",
         output_dir="output",
         file_path="lstm_predictions_charger.csv"
     shell:
         """
-        echo "Exécution de Papermill avec :"
-        echo "MLFLOW_URL: {params.mlflow_url}"
-        echo "PUSHGATEWAY_URL: {params.pushgateway_url}"
-        echo "Output dir: {params.output_dir}"
-        echo "File path: {params.file_path}"
         python -m papermill {input.notebook} {output[0]} \
             -p MLFLOW_URL {params.mlflow_url} \
             -p PUSHGATEWAY_URL {params.pushgateway_url} \
             -p output_dir {params.output_dir} \
             -p file_path {params.file_path} \
-            --kernel python3 --log-output --log-level DEBUG || { echo "Erreur lors de l'exécution de Papermill"; exit 1; }
-        ls -l {output[0]} {output[1]} {output[2]} || { echo "Erreur : Un ou plusieurs fichiers de sortie non créés"; exit 1; }
-        echo "Contenu de {output[1]} :"
-        cat {output[1]} || echo "Erreur : Impossible de lire {output[1]}"
-        echo "Contenu de {output[2]} :"
-        cat {output[2]} || echo "Erreur : Impossible de lire {output[2]}"
+            --kernel python3
         """
-
-# Règle principale
-rule all:
-    input:
-        "output/ppo_bess_model_metrics.json",
-        "output/evaluation_metrics.json",
-        "output/ppo_pipeline_executed.ipynb"
