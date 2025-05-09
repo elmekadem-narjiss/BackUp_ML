@@ -239,13 +239,19 @@ jobs:
         shell: bash
 
       - name: Upload build artifacts
-        uses: actions/upload-artifact@v4
-        with:
-          name: build-artifacts
-          path: |
-            output/*
-            ppo_pipeline.ipynb
-        if-no-files-found: warn
+        run: |
+          if ls output/* ppo_pipeline.ipynb 2>/dev/null; then
+            echo "Uploading artifacts..."
+            actions/upload-artifact@v4
+            with:
+              name: build-artifacts
+              path: |
+                output/*
+                ppo_pipeline.ipynb
+          else
+            echo "Avertissement : Aucun fichier à uploader pour build-artifacts"
+          fi
+        shell: bash
 
       - name: Notify on build results
         if: always()
@@ -366,14 +372,20 @@ jobs:
         shell: bash
 
       - name: Upload test artifacts
-        uses: actions/upload-artifact@v4
-        with:
-          name: test-artifacts
-          path: |
-            test-results.xml
-            report.html
-            *.log
-        if-no-files-found: warn
+        run: |
+          if ls test-results.xml report.html *.log 2>/dev/null; then
+            echo "Uploading test artifacts..."
+            actions/upload-artifact@v4
+            with:
+              name: test-artifacts
+              path: |
+                test-results.xml
+                report.html
+                *.log
+          else
+            echo "Avertissement : Aucun fichier à uploader pour test-artifacts"
+          fi
+        shell: bash
 
       - name: Notify on test results
         if: always()
