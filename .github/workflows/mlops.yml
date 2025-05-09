@@ -238,19 +238,35 @@ jobs:
           echo "✅ Fin de l'exécution, vérification via Grafana et Prometheus"
         shell: bash
 
-      - name: Upload build artifacts
+      - name: Prepare and upload build artifacts
         run: |
-          if ls output/* ppo_pipeline.ipynb 2>/dev/null; then
-            echo "Uploading artifacts..."
-            actions/upload-artifact@v4
-            with:
-              name: build-artifacts
-              path: |
-                output/*
-                ppo_pipeline.ipynb
+          # Créer un répertoire temporaire pour les artefacts
+          mkdir -p artifacts
+          # Copier les fichiers de output/ s'ils existent
+          if ls output/* 2>/dev/null; then
+            cp output/* artifacts/
+            echo "Fichiers de output/ copiés dans artifacts/"
+            ls -l artifacts/
           else
-            echo "Avertissement : Aucun fichier à uploader pour build-artifacts"
+            echo "Avertissement : Aucun fichier dans output/, ajout d'un fichier placeholder"
+            echo "Aucun fichier généré dans output/" > artifacts/placeholder.txt
           fi
+          # Ajouter ppo_pipeline.ipynb s'il existe
+          if [ -f ppo_pipeline.ipynb ]; then
+            cp ppo_pipeline.ipynb artifacts/
+            echo "ppo_pipeline.ipynb copié dans artifacts/"
+          else
+            echo "Avertissement : ppo_pipeline.ipynb non trouvé"
+            echo "Placeholder pour ppo_pipeline.ipynb" > artifacts/ppo_pipeline_placeholder.txt
+          fi
+          # Vérifier le contenu du répertoire artifacts/
+          ls -l artifacts/
+          # Uploader les artefacts
+          echo "Uploading artifacts..."
+          actions/upload-artifact@v4
+          with:
+            name: build-artifacts
+            path: artifacts/*
         shell: bash
 
       - name: Notify on build results
@@ -384,6 +400,12 @@ jobs:
                 *.log
           else
             echo "Avertissement : Aucun fichier à uploader pour test-artifacts"
+            mkdir -p artifacts
+            echo "Aucun fichier de test généré" > artifacts/test_placeholder.txt
+            actions/upload-artifact@v4
+            with:
+              name: test-artifacts
+              path: artifacts/test_placeholder.txt
           fi
         shell: bash
 
