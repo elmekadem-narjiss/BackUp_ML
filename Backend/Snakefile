@@ -43,8 +43,29 @@ rule train_model:
     shell:
         """
         source venv/bin/activate
+        echo "Environnement avant exécution :"
+        which python
+        python --version
+        pip list
         echo "Exécution de train_ppo.py avec input: {input}"
         python Backend/train_ppo.py --input {input} --output {output} || { echo "Erreur lors de l'exécution de train_ppo.py, vérifiez les logs"; exit 1; }
+        ls -l {output} || { echo "Erreur : {output} non créé"; exit 1; }
+        echo "Contenu de {output} :"
+        cat {output} || echo "Erreur : Impossible de lire {output}"
+        """
+
+# Règle pour évaluer le modèle
+rule evaluate_model:
+    input:
+        "data/raw_data.csv",
+        "output/ppo_bess_model_metrics.json"
+    output:
+        "output/evaluation_metrics.json"
+    shell:
+        """
+        source venv/bin/activate
+        echo "Exécution de evaluate_ppo.py avec input: {input[0]}"
+        python Backend/evaluate_ppo.py --input {input[0]} --output {output} || { echo "Erreur lors de l'exécution de evaluate_ppo.py, vérifiez les logs"; exit 1; }
         ls -l {output} || { echo "Erreur : {output} non créé"; exit 1; }
         echo "Contenu de {output} :"
         cat {output} || echo "Erreur : Impossible de lire {output}"
@@ -53,4 +74,5 @@ rule train_model:
 # Règle principale
 rule all:
     input:
-        "output/ppo_bess_model_metrics.json"
+        "output/ppo_bess_model_metrics.json",
+        "output/evaluation_metrics.json"
