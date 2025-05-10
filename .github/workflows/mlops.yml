@@ -101,6 +101,7 @@ jobs:
           cat Backend/config.yaml
           MLFLOW_URL=$(yq .mlflow.url Backend/config.yaml | tr -d '"')
           PUSHGATEWAY_URL=$(yq .pushgateway.url Backend/config.yaml | tr -d '"')
+          PROMETHEUS_URL=$(yq .prometheus.url Backend/config.yaml | tr -d '"')
           if [ -z "$MLFLOW_URL" ]; then
             echo "Erreur : mlflow.url non défini dans config.yaml"
             exit 1
@@ -109,11 +110,17 @@ jobs:
             echo "Erreur : pushgateway.url non défini dans config.yaml"
             exit 1
           fi
+          if [ -z "$PROMETHEUS_URL" ]; then
+            echo "Erreur : prometheus.url non défini dans config.yaml"
+            exit 1
+          fi
           echo "MLFLOW_URL: $MLFLOW_URL"
           echo "PUSHGATEWAY_URL: $PUSHGATEWAY_URL"
+          echo "PROMETHEUS_URL: $PROMETHEUS_URL"
           echo "Exporting variables for subsequent steps..."
           echo "MLFLOW_URL=$MLFLOW_URL" >> $GITHUB_ENV
           echo "PUSHGATEWAY_URL=$PUSHGATEWAY_URL" >> $GITHUB_ENV
+          echo "PROMETHEUS_URL=$PROMETHEUS_URL" >> $GITHUB_ENV
         shell: bash
 
       - name: Download notebook and scripts
@@ -131,9 +138,9 @@ jobs:
           snakemake --snakefile Backend/Snakefile --cores 1 --verbose
         shell: bash
 
-      - name: Check PushGateway accessibility
+      - name: Check Pushgateway accessibility
         run: |
-          echo "Vérification de l'accessibilité de la PushGateway : $PUSHGATEWAY_URL"
+          echo "Vérification de l'accessibilité de la Pushgateway : $PUSHGATEWAY_URL"
           if [ -z "$PUSHGATEWAY_URL" ]; then
             echo "Erreur : PUSHGATEWAY_URL n'est pas défini ou est vide"
             exit 1
@@ -142,16 +149,16 @@ jobs:
           echo "Envoi de la métrique de test vers $FULL_URL"
           STATUS=$(echo "test_accessibility{job=\"mlflow_and_snakemake_metrics\"} 1" | curl -s -L -w "%{http_code}" --data-binary @- "$FULL_URL" -o /dev/null)
           if [ "$STATUS" -eq 200 ]; then
-            echo "PushGateway accessible, code HTTP : $STATUS"
-            echo "Vérification de la métrique test_accessibility dans PushGateway :"
+            echo "Pushgateway accessible, code HTTP : $STATUS"
+            echo "Vérification de la métrique test_accessibility dans Pushgateway :"
             curl -s -L "$PUSHGATEWAY_URL/metrics" | grep test_accessibility || echo "Métrique test_accessibility non trouvée"
           else
-            echo "Erreur : PushGateway renvoie le code HTTP $STATUS"
+            echo "Erreur : Pushgateway renvoie le code HTTP $STATUS"
             exit 1
           fi
         shell: bash
 
-      - name: Push selected MLFlow metrics to Prometheus
+      - name: Push selected MLFlow metrics to Pushgateway and Prometheus
         run: |
           source venv/bin/activate
           declare -A metrics_92f5=(
@@ -170,30 +177,60 @@ jobs:
             [mse]=0.005455112014267468
             [scale]=1
           )
-          echo "Envoi des métriques metrics_92f5..."
+          TIMESTAMP=$(date +%s)
+          # Push to Pushgateway
+          echo "Envoi des métriques metrics_92f5 à Pushgateway..."
           for key in "${!metrics_92f5[@]}"; do
             value=${metrics_92f5[$key]}
-            echo "Envoi : $key{run=\"92f5893e1dbe4175a3f4313bc89c56b4\",job=\"mlflow_and_snakemake_metrics\"} $value"
+            echo "Envoi à Pushgateway : $key{run=\"92f5893e1dbe4175a3f4313bc89c56b4\",job=\"mlflow_and_snakemake_metrics\"} $value"
             STATUS=$(echo "$key{run=\"92f5893e1dbe4175a3f4313bc89c56b4\",job=\"mlflow_and_snakemake_metrics\"} $value" | curl -s -L -w "%{http_code}" --data-binary @- "$PUSHGATEWAY_URL/metrics/job/mlflow_and_snakemake_metrics" -o /dev/null)
             if [ "$STATUS" -eq 200 ]; then
-              echo "Succès : Métrique $key envoyée, code HTTP $STATUS"
+              echo "Succès : Métrique $key envoyée à Pushgateway, code HTTP $STATUS"
             else
-              echo "Erreur : Échec de l'envoi de la métrique $key, code HTTP $STATUS"
+              echo "Erreur : Échec de l'envoi de la métrique $key à Pushgateway, code HTTP $STATUS"
               exit 1
             fi
           done
-          echo "Envoi des métriques metrics_ad0c..."
+          echo "Envoi des métriques metrics_ad0c à Pushgateway..."
           for key in "${!metrics_ad0c[@]}"; do
             value=${metrics_ad0c[$key]}
-            echo "Envoi : $key{run=\"ad0cf78265204f34b84a40aa09895c7f\",job=\"mlflow_and_snakemake_metrics\"} $value"
+            echo "Envoi à Pushgateway : $key{run=\"ad0cf78265204f34b84a40aa09895c7f\",job=\"mlflow_and_snakemake_metrics\"} $value"
             STATUS=$(echo "$key{run=\"ad0cf78265204f34b84a40aa09895c7f\",job=\"mlflow_and_snakemake_metrics\"} $value" | curl -s -L -w "%{http_code}" --data-binary @- "$PUSHGATEWAY_URL/metrics/job/mlflow_and_snakemake_metrics" -o /dev/null)
             if [ "$STATUS" -eq 200 ]; then
-              echo "Succès : Métrique $key envoyée, code HTTP $STATUS"
+              echo "Succès : Métrique $key envoyée à Pushgateway, code HTTP $STATUS"
             else
-              echo "Erreur : Échec de l'envoi de la métrique $key, code HTTP $STATUS"
+              echo "Erreur : Échec de l'envoi de la métrique $key à Pushgateway, code HTTP $STATUS"
               exit 1
             fi
           done
+          # Push to Prometheus
+          DATA="json
+          {
+            \"streams\": [
+              {
+                \"labels\": {\"job\":\"mlflow_and_snakemake_metrics\", \"run\":\"92f5893e1dbe4175a3f4313bc89c56b4\"},
+                \"entries\": ["
+          for key in "${!metrics_92f5[@]}"; do
+            value=${metrics_92f5[$key]}
+            DATA+="{ \"ts\": \"$(date -u +%Y-%m-%dT%H:%M:%SZ)\", \"value\": $value },"
+          done
+          DATA=${DATA%,}
+          DATA+="]
+              },
+              {
+                \"labels\": {\"job\":\"mlflow_and_snakemake_metrics\", \"run\":\"ad0cf78265204f34b84a40aa09895c7f\"},
+                \"entries\": ["
+          for key in "${!metrics_ad0c[@]}"; do
+            value=${metrics_ad0c[$key]}
+            DATA+="{ \"ts\": \"$(date -u +%Y-%m-%dT%H:%M:%SZ)\", \"value\": $value },"
+          done
+          DATA=${DATA%,}
+          DATA+="]
+              }
+            ]
+          }"
+          echo "Envoi des métriques à Prometheus..."
+          echo "$DATA" | curl -s -X POST -H "Content-Type: application/json" -d @- "$PROMETHEUS_URL/api/v1/write" -o /dev/null
           echo "Vérification des fichiers PPO JSON :"
           if [ -f output/ppo_bess_model_metrics.json ]; then
             echo "Fichier ppo_bess_model_metrics.json trouvé. Contenu :"
@@ -204,14 +241,29 @@ jobs:
               exit 1
             else
               while IFS= read -r metric; do
-                echo "Envoi de la métrique PPO (entraînement) : $metric"
+                echo "Envoi de la métrique PPO (entraînement) à Pushgateway : $metric"
                 STATUS=$(echo "$metric" | curl -s -L -w "%{http_code}" --data-binary @- "$PUSHGATEWAY_URL/metrics/job/ppo_metrics" -o /dev/null)
                 if [ "$STATUS" -eq 200 ]; then
-                  echo "Succès : Métrique PPO envoyée, code HTTP $STATUS"
+                  echo "Succès : Métrique PPO envoyée à Pushgateway, code HTTP $STATUS"
                 else
-                  echo "Erreur : Échec de l'envoi de la métrique PPO, code HTTP $STATUS"
+                  echo "Erreur : Échec de l'envoi de la métrique PPO à Pushgateway, code HTTP $STATUS"
                   exit 1
                 fi
+                KEY=$(echo "$metric" | cut -d'{' -f1)
+                VALUE=$(echo "$metric" | cut -d' ' -f2)
+                DATA="json
+                {
+                  \"streams\": [
+                    {
+                      \"labels\": {\"job\":\"ppo_metrics\", \"run\":\"ppo_training\"},
+                      \"entries\": [
+                        { \"ts\": \"$(date -u +%Y-%m-%dT%H:%M:%SZ)\", \"value\": $VALUE }
+                      ]
+                    }
+                  ]
+                }"
+                echo "Envoi de la métrique PPO (entraînement) à Prometheus : $KEY=$VALUE"
+                echo "$DATA" | curl -s -X POST -H "Content-Type: application/json" -d @- "$PROMETHEUS_URL/api/v1/write" -o /dev/null
               done <<< "$TRAIN_METRICS"
             fi
           else
@@ -227,14 +279,29 @@ jobs:
               exit 1
             else
               while IFS= read -r metric; do
-                echo "Envoi de la métrique PPO (évaluation) : $metric"
+                echo "Envoi de la métrique PPO (évaluation) à Pushgateway : $metric"
                 STATUS=$(echo "$metric" | curl -s -L -w "%{http_code}" --data-binary @- "$PUSHGATEWAY_URL/metrics/job/ppo_metrics" -o /dev/null)
                 if [ "$STATUS" -eq 200 ]; then
-                  echo "Succès : Métrique PPO envoyée, code HTTP $STATUS"
+                  echo "Succès : Métrique PPO envoyée à Pushgateway, code HTTP $STATUS"
                 else
-                  echo "Erreur : Échec de l'envoi de la métrique PPO, code HTTP $STATUS"
+                  echo "Erreur : Échec de l'envoi de la métrique PPO à Pushgateway, code HTTP $STATUS"
                   exit 1
                 fi
+                KEY=$(echo "$metric" | cut -d'{' -f1)
+                VALUE=$(echo "$metric" | cut -d' ' -f2)
+                DATA="json
+                {
+                  \"streams\": [
+                    {
+                      \"labels\": {\"job\":\"ppo_metrics\", \"run\":\"ppo_evaluation\"},
+                      \"entries\": [
+                        { \"ts\": \"$(date -u +%Y-%m-%dT%H:%M:%SZ)\", \"value\": $VALUE }
+                      ]
+                    }
+                  ]
+                }"
+                echo "Envoi de la métrique PPO (évaluation) à Prometheus : $KEY=$VALUE"
+                echo "$DATA" | curl -s -X POST -H "Content-Type: application/json" -d @- "$PROMETHEUS_URL/api/v1/write" -o /dev/null
               done <<< "$EVAL_METRICS"
             fi
           else
@@ -243,34 +310,60 @@ jobs:
           fi
         shell: bash
 
-      - name: Push global success metric to Prometheus
+      - name: Push global success metric to Pushgateway and Prometheus
         run: |
-          if [ -z "$PUSHGATEWAY_URL" ]; then
-            echo "Erreur : PUSHGATEWAY_URL n'est pas défini ou est vide"
+          if [ -z "$PUSHGATEWAY_URL" ] || [ -z "$PROMETHEUS_URL" ]; then
+            echo "Erreur : PUSHGATEWAY_URL ou PROMETHEUS_URL n'est pas défini ou est vide"
             exit 1
           fi
+          # Push to Pushgateway
           STATUS=$(echo "success{job=\"mlflow_and_snakemake_metrics\"} 1" | curl -s -L -w "%{http_code}" --data-binary @- "$PUSHGATEWAY_URL/metrics/job/mlflow_and_snakemake_metrics" -o /dev/null)
           if [ "$STATUS" -eq 200 ]; then
-            echo "Succès : Métrique success envoyée, code HTTP $STATUS"
+            echo "Succès : Métrique success envoyée à Pushgateway, code HTTP $STATUS"
           else
-            echo "Erreur : Échec de l'envoi de la métrique success, code HTTP $STATUS"
+            echo "Erreur : Échec de l'envoi de la métrique success à Pushgateway, code HTTP $STATUS"
             exit 1
           fi
+          # Push to Prometheus
+          DATA="json
+          {
+            \"streams\": [
+              {
+                \"labels\": {\"job\":\"mlflow_and_snakemake_metrics\"},
+                \"entries\": [
+                  { \"ts\": \"$(date -u +%Y-%m-%dT%H:%M:%SZ)\", \"value\": 1 }
+                ]
+              }
+            ]
+          }"
+          echo "Envoi de la métrique success à Prometheus..."
+          echo "$DATA" | curl -s -X POST -H "Content-Type: application/json" -d @- "$PROMETHEUS_URL/api/v1/write" -o /dev/null
         shell: bash
 
-      - name: Check metrics in PushGateway
+      - name: Check metrics in Pushgateway
         run: |
           if [ -z "$PUSHGATEWAY_URL" ]; then
             echo "Erreur : PUSHGATEWAY_URL n'est pas défini ou est vide"
             exit 1
           fi
-          echo "🔍 Vérification des métriques dans PushGateway..."
+          echo "🔍 Vérification des métriques dans Pushgateway..."
           curl -s -L "$PUSHGATEWAY_URL/metrics" | grep -E 'scale|loss|mae|mse|aic|bic|llf|r2_score|rmse|df_model|df_resid|success|avg_reward|avg_cycles|avg_accuracy|total_reward|cycles|accuracy' || echo "⚠️ Pas de métriques visibles"
+        shell: bash
+
+      - name: Verify Metrics in Prometheus
+        run: |
+          if [ -z "$PROMETHEUS_URL" ]; then
+            echo "Erreur : PROMETHEUS_URL n'est pas défini ou est vide"
+            exit 1
+          fi
+          echo "🔍 Vérification des métriques dans Prometheus..."
+          curl -s -L "$PROMETHEUS_URL/api/v1/query?query=workflow_duration" | jq . || echo "Métrique workflow_duration non trouvée dans Prometheus"
+          curl -s -L "$PROMETHEUS_URL/api/v1/query?query=success" | jq . || echo "Métrique success non trouvée dans Prometheus"
         shell: bash
 
       - name: Complete Monitoring
         run: |
-          echo "✅ Fin de l'exécution, vérification via Grafana et Prometheus"
+          echo "✅ Fin de l'exécution, vérification via Grafana Cloud"
         shell: bash
 
       - name: Upload build artifacts
@@ -292,14 +385,29 @@ jobs:
 
       - name: Record build workflow metrics
         run: |
-          if [ -z "$PUSHGATEWAY_URL" ]; then
-            echo "Erreur : PUSHGATEWAY_URL n'est pas défini ou est vide"
+          if [ -z "$PUSHGATEWAY_URL" ] || [ -z "$PROMETHEUS_URL" ]; then
+            echo "Erreur : PUSHGATEWAY_URL ou PROMETHEUS_URL n'est pas défini ou est vide"
             exit 1
           fi
           START_TIME=$(date +%s)
           END_TIME=$(date +%s)
           DURATION=$((END_TIME - START_TIME))
+          # Push to Pushgateway
           echo "workflow_duration{job=\"build\",repository=\"${{ github.repository }}\"} $DURATION" | curl -s -L --data-binary @- "$PUSHGATEWAY_URL/metrics/job/workflow_metrics"
+          # Push to Prometheus
+          DATA="json
+          {
+            \"streams\": [
+              {
+                \"labels\": {\"job\":\"workflow_metrics\", \"repository\":\"${{ github.repository }}\"},
+                \"entries\": [
+                  { \"ts\": \"$(date -u +%Y-%m-%dT%H:%M:%SZ)\", \"value\": $DURATION }
+                ]
+              }
+            ]
+          }"
+          echo "Envoi de la métrique workflow_duration à Prometheus..."
+          echo "$DATA" | curl -s -X POST -H "Content-Type: application/json" -d @- "$PROMETHEUS_URL/api/v1/write" -o /dev/null
         shell: bash
 
   integration-test:
@@ -359,13 +467,20 @@ jobs:
           echo "Backend/config.yaml found"
           cat Backend/config.yaml
           PUSHGATEWAY_URL=$(yq .pushgateway.url Backend/config.yaml | tr -d '"')
+          PROMETHEUS_URL=$(yq .prometheus.url Backend/config.yaml | tr -d '"')
           if [ -z "$PUSHGATEWAY_URL" ]; then
             echo "Erreur : pushgateway.url non défini dans config.yaml"
             exit 1
           fi
+          if [ -z "$PROMETHEUS_URL" ]; then
+            echo "Erreur : prometheus.url non défini dans config.yaml"
+            exit 1
+          fi
           echo "PUSHGATEWAY_URL: $PUSHGATEWAY_URL"
+          echo "PROMETHEUS_URL: $PROMETHEUS_URL"
           echo "Exporting variables for subsequent steps..."
           echo "PUSHGATEWAY_URL=$PUSHGATEWAY_URL" >> $GITHUB_ENV
+          echo "PROMETHEUS_URL=$PROMETHEUS_URL" >> $GITHUB_ENV
         shell: bash
 
       - name: Check tests directory structure
@@ -431,6 +546,17 @@ jobs:
           pytest tests/ --html=report.html --self-contained-html --junitxml=test-results.xml -v
         shell: bash
 
+      - name: Verify Metrics in Prometheus
+        run: |
+          if [ -z "$PROMETHEUS_URL" ]; then
+            echo "Erreur : PROMETHEUS_URL n'est pas défini ou est vide"
+            exit 1
+          fi
+          echo "🔍 Vérification des métriques dans Prometheus..."
+          curl -s -L "$PROMETHEUS_URL/api/v1/query?query=workflow_duration" | jq . || echo "Métrique workflow_duration non trouvée dans Prometheus"
+          curl -s -L "$PROMETHEUS_URL/api/v1/query?query=success" | jq . || echo "Métrique success non trouvée dans Prometheus"
+        shell: bash
+
       - name: Upload test artifacts
         uses: actions/upload-artifact@v4
         with:
@@ -450,15 +576,29 @@ jobs:
 
       - name: Record workflow metrics
         run: |
-          if [ -z "$PUSHGATEWAY_URL" ]; then
-            echo "Erreur : PUSHGATEWAY_URL n'est pas défini ou est vide"
+          if [ -z "$PUSHGATEWAY_URL" ] || [ -z "$PROMETHEUS_URL" ]; then
+            echo "Erreur : PUSHGATEWAY_URL ou PROMETHEUS_URL n'est pas défini ou est vide"
             exit 1
           fi
           START_TIME=$(date +%s)
-          # Simulate test execution (already done in previous step)
           END_TIME=$(date +%s)
           DURATION=$((END_TIME - START_TIME))
+          # Push to Pushgateway
           echo "workflow_duration{job=\"integration-test\",repository=\"${{ github.repository }}\"} $DURATION" | curl -s -L --data-binary @- "$PUSHGATEWAY_URL/metrics/job/workflow_metrics"
+          # Push to Prometheus
+          DATA="json
+          {
+            \"streams\": [
+              {
+                \"labels\": {\"job\":\"workflow_metrics\", \"repository\":\"${{ github.repository }}\"},
+                \"entries\": [
+                  { \"ts\": \"$(date -u +%Y-%m-%dT%H:%M:%SZ)\", \"value\": $DURATION }
+                ]
+              }
+            ]
+          }"
+          echo "Envoi de la métrique workflow_duration à Prometheus..."
+          echo "$DATA" | curl -s -X POST -H "Content-Type: application/json" -d @- "$PROMETHEUS_URL/api/v1/write" -o /dev/null
         shell: bash
 
   deploy:
@@ -487,13 +627,20 @@ jobs:
           echo "Backend/config.yaml found"
           cat Backend/config.yaml
           PUSHGATEWAY_URL=$(yq .pushgateway.url Backend/config.yaml | tr -d '"')
+          PROMETHEUS_URL=$(yq .prometheus.url Backend/config.yaml | tr -d '"')
           if [ -z "$PUSHGATEWAY_URL" ]; then
             echo "Erreur : pushgateway.url non défini dans config.yaml"
             exit 1
           fi
+          if [ -z "$PROMETHEUS_URL" ]; then
+            echo "Erreur : prometheus.url non défini dans config.yaml"
+            exit 1
+          fi
           echo "PUSHGATEWAY_URL: $PUSHGATEWAY_URL"
+          echo "PROMETHEUS_URL: $PROMETHEUS_URL"
           echo "Exporting variables for subsequent steps..."
           echo "PUSHGATEWAY_URL=$PUSHGATEWAY_URL" >> $GITHUB_ENV
+          echo "PROMETHEUS_URL=$PROMETHEUS_URL" >> $GITHUB_ENV
         shell: bash
 
       - name: Download build artifacts
@@ -546,6 +693,17 @@ jobs:
           git push https://x-access-token:${{ secrets.GITHUB_TOKEN }}@github.com/${{ github.repository }}.git main
         shell: bash
 
+      - name: Verify Metrics in Prometheus
+        run: |
+          if [ -z "$PROMETHEUS_URL" ]; then
+            echo "Erreur : PROMETHEUS_URL n'est pas défini ou est vide"
+            exit 1
+          fi
+          echo "🔍 Vérification des métriques dans Prometheus..."
+          curl -s -L "$PROMETHEUS_URL/api/v1/query?query=workflow_duration" | jq . || echo "Métrique workflow_duration non trouvée dans Prometheus"
+          curl -s -L "$PROMETHEUS_URL/api/v1/query?query=success" | jq . || echo "Métrique success non trouvée dans Prometheus"
+        shell: bash
+
       - name: Notify on deploy results
         if: always()
         run: |
@@ -557,12 +715,27 @@ jobs:
 
       - name: Record deploy workflow metrics
         run: |
-          if [ -z "$PUSHGATEWAY_URL" ]; then
-            echo "Erreur : PUSHGATEWAY_URL n'est pas défini ou est vide"
+          if [ -z "$PUSHGATEWAY_URL" ] || [ -z "$PROMETHEUS_URL" ]; then
+            echo "Erreur : PUSHGATEWAY_URL ou PROMETHEUS_URL n'est pas défini ou est vide"
             exit 1
           fi
           START_TIME=$(date +%s)
           END_TIME=$(date +%s)
           DURATION=$((END_TIME - START_TIME))
+          # Push to Pushgateway
           echo "workflow_duration{job=\"deploy\",repository=\"${{ github.repository }}\"} $DURATION" | curl -s -L --data-binary @- "$PUSHGATEWAY_URL/metrics/job/workflow_metrics"
+          # Push to Prometheus
+          DATA="json
+          {
+            \"streams\": [
+              {
+                \"labels\": {\"job\":\"workflow_metrics\", \"repository\":\"${{ github.repository }}\"},
+                \"entries\": [
+                  { \"ts\": \"$(date -u +%Y-%m-%dT%H:%M:%SZ)\", \"value\": $DURATION }
+                ]
+              }
+            ]
+          }"
+          echo "Envoi de la métrique workflow_duration à Prometheus..."
+          echo "$DATA" | curl -s -X POST -H "Content-Type: application/json" -d @- "$PROMETHEUS_URL/api/v1/write" -o /dev/null
         shell: bash
