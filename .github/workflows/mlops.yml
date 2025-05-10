@@ -109,9 +109,13 @@ jobs:
           fi
           echo "Backend/config.yaml found"
           cat Backend/config.yaml
+          echo "Extracting URLs with yq..."
           MLFLOW_URL=$(yq .mlflow.url Backend/config.yaml | tr -d '"')
           PUSHGATEWAY_URL=$(yq .pushgateway.url Backend/config.yaml | tr -d '"')
           PROMETHEUS_URL=$(yq .prometheus.url Backend/config.yaml | tr -d '"')
+          echo "MLFLOW_URL extracted: $MLFLOW_URL"
+          echo "PUSHGATEWAY_URL extracted: $PUSHGATEWAY_URL"
+          echo "PROMETHEUS_URL extracted: $PROMETHEUS_URL"
           if [ -z "$MLFLOW_URL" ]; then
             echo "Erreur : mlflow.url non défini dans config.yaml"
             exit 1
@@ -124,13 +128,21 @@ jobs:
             echo "Erreur : prometheus.url non défini dans config.yaml"
             exit 1
           fi
-          echo "MLFLOW_URL: $MLFLOW_URL"
-          echo "PUSHGATEWAY_URL: $PUSHGATEWAY_URL"
-          echo "PROMETHEUS_URL: $PROMETHEUS_URL"
-          echo "Exporting variables for subsequent steps..."
+          echo "Exporting variables to GITHUB_ENV..."
           echo "MLFLOW_URL=$MLFLOW_URL" >> $GITHUB_ENV
           echo "PUSHGATEWAY_URL=$PUSHGATEWAY_URL" >> $GITHUB_ENV
           echo "PROMETHEUS_URL=$PROMETHEUS_URL" >> $GITHUB_ENV
+          echo "Verifying exported variables..."
+          echo "GITHUB_ENV content after export:"
+          cat $GITHUB_ENV
+        shell: bash
+
+      - name: Debug Environment Variables
+        run: |
+          echo "Checking environment variables..."
+          echo "PUSHGATEWAY_URL from env: $PUSHGATEWAY_URL"
+          echo "PROMETHEUS_URL from env: $PROMETHEUS_URL"
+          echo "MLFLOW_URL from env: $MLFLOW_URL"
         shell: bash
 
       - name: Download notebook and scripts
@@ -150,7 +162,7 @@ jobs:
 
       - name: Check Pushgateway accessibility
         run: |
-          echo "Vérification de l'accessibilité de la Pushgateway : $PUSHGATEWAY_URL"
+          echo "PUSHGATEWAY_URL before check: $PUSHGATEWAY_URL"
           if [ -z "$PUSHGATEWAY_URL" ]; then
             echo "Erreur : PUSHGATEWAY_URL n'est pas défini ou est vide"
             exit 1
@@ -172,6 +184,11 @@ jobs:
       - name: Push selected MLFlow metrics to Pushgateway
         run: |
           source venv/bin/activate
+          echo "PUSHGATEWAY_URL before pushing metrics: $PUSHGATEWAY_URL"
+          if [ -z "$PUSHGATEWAY_URL" ]; then
+            echo "Erreur : PUSHGATEWAY_URL n'est pas défini ou est vide"
+            exit 1
+          fi
           RUN_ID=${{ github.run_id }}
           # MLFlow metrics for run 92f5893e1dbe4175a3f4313bc89c56b4
           echo "mse{run=\"92f5893e1dbe4175a3f4313bc89c56b4\",job=\"mlflow_and_snakemake_metrics\",run_id=\"$RUN_ID\"} 0.039917658308037784" | curl -s -L --data-binary @- "$PUSHGATEWAY_URL/metrics/job/mlflow_and_snakemake_metrics"
@@ -180,7 +197,7 @@ jobs:
           echo "rmse{run=\"92f5893e1dbe4175a3f4313bc89c56b4\",job=\"mlflow_and_snakemake_metrics\",run_id=\"$RUN_ID\"} 0.19979403972100315" | curl -s -L --data-binary @- "$PUSHGATEWAY_URL/metrics/job/mlflow_and_snakemake_metrics"
           echo "r2_score{run=\"92f5893e1dbe4175a3f4313bc89c56b4\",job=\"mlflow_and_snakemake_metrics\",run_id=\"$RUN_ID\"} 0.6619863834818595" | curl -s -L --data-binary @- "$PUSHGATEWAY_URL/metrics/job/mlflow_and_snakemake_metrics"
           # MLFlow metrics for run ad0cf78265204f34b84a40aa09895c7f
-          echo "df_resid{run=\"ad0cf78265204f34b84a40aa09895c7f\",job=\"mlflow_and_snakemake_metrics\",run_id=\"$RUN_ID\"} 9999999" | curl -s -L --data-binary @- "$PUSHGATEWAY_URL/metrics/job/mlflow_and_snakemake_metrics"  # Remplacement de Inf
+          echo "df_resid{run=\"ad0cf78265204f34b84a40aa09895c7f\",job=\"mlflow_and_snakemake_metrics\",run_id=\"$RUN_ID\"} 9999999" | curl -s -L --data-binary @- "$PUSHGATEWAY_URL/metrics/job/mlflow_and_snakemake_metrics"
           echo "scale{run=\"ad0cf78265204f34b84a40aa09895c7f\",job=\"mlflow_and_snakemake_metrics\",run_id=\"$RUN_ID\"} 1" | curl -s -L --data-binary @- "$PUSHGATEWAY_URL/metrics/job/mlflow_and_snakemake_metrics"
           echo "mse{run=\"ad0cf78265204f34b84a40aa09895c7f\",job=\"mlflow_and_snakemake_metrics\",run_id=\"$RUN_ID\"} 0.005455112014267468" | curl -s -L --data-binary @- "$PUSHGATEWAY_URL/metrics/job/mlflow_and_snakemake_metrics"
           echo "bic{run=\"ad0cf78265204f34b84a40aa09895c7f\",job=\"mlflow_and_snakemake_metrics\",run_id=\"$RUN_ID\"} 3180.9434357641003" | curl -s -L --data-binary @- "$PUSHGATEWAY_URL/metrics/job/mlflow_and_snakemake_metrics"
@@ -192,6 +209,11 @@ jobs:
       - name: Push PPO metrics to Pushgateway
         run: |
           source venv/bin/activate
+          echo "PUSHGATEWAY_URL before pushing PPO metrics: $PUSHGATEWAY_URL"
+          if [ -z "$PUSHGATEWAY_URL" ]; then
+            echo "Erreur : PUSHGATEWAY_URL n'est pas défini ou est vide"
+            exit 1
+          fi
           RUN_ID=${{ github.run_id }}
           if [ -f output/ppo_bess_model_metrics.json ]; then
             echo "Fichier ppo_bess_model_metrics.json trouvé. Contenu :"
@@ -244,6 +266,7 @@ jobs:
       - name: Push global success metric to Pushgateway
         if: success()
         run: |
+          echo "PUSHGATEWAY_URL before pushing success metric: $PUSHGATEWAY_URL"
           if [ -z "$PUSHGATEWAY_URL" ]; then
             echo "Erreur : PUSHGATEWAY_URL n'est pas défini ou est vide"
             exit 1
@@ -254,6 +277,7 @@ jobs:
 
       - name: Check metrics in Pushgateway
         run: |
+          echo "PUSHGATEWAY_URL before checking metrics: $PUSHGATEWAY_URL"
           if [ -z "$PUSHGATEWAY_URL" ]; then
             echo "Erreur : PUSHGATEWAY_URL n'est pas défini ou est vide"
             exit 1
@@ -264,6 +288,7 @@ jobs:
 
       - name: Verify Metrics in Prometheus
         run: |
+          echo "PROMETHEUS_URL before verifying metrics: $PROMETHEUS_URL"
           if [ -z "$PROMETHEUS_URL" ]; then
             echo "Erreur : PROMETHEUS_URL n'est pas défini ou est vide"
             exit 1
@@ -298,6 +323,11 @@ jobs:
       - name: Record build workflow metrics
         if: always()
         run: |
+          echo "PUSHGATEWAY_URL before recording metrics: $PUSHGATEWAY_URL"
+          if [ -z "$PUSHGATEWAY_URL" ]; then
+            echo "Erreur : PUSHGATEWAY_URL n'est pas défini ou est vide"
+            exit 1
+          fi
           if [ ! -f start_time.txt ]; then
             echo "Erreur : start_time.txt n'existe pas"
             exit 1
@@ -313,6 +343,7 @@ jobs:
       - name: Push error count metric
         if: failure()
         run: |
+          echo "PUSHGATEWAY_URL before pushing error count: $PUSHGATEWAY_URL"
           if [ -z "$PUSHGATEWAY_URL" ]; then
             echo "Erreur : PUSHGATEWAY_URL n'est pas défini ou est vide"
             exit 1
@@ -387,8 +418,11 @@ jobs:
           fi
           echo "Backend/config.yaml found"
           cat Backend/config.yaml
+          echo "Extracting URLs with yq..."
           PUSHGATEWAY_URL=$(yq .pushgateway.url Backend/config.yaml | tr -d '"')
           PROMETHEUS_URL=$(yq .prometheus.url Backend/config.yaml | tr -d '"')
+          echo "PUSHGATEWAY_URL extracted: $PUSHGATEWAY_URL"
+          echo "PROMETHEUS_URL extracted: $PROMETHEUS_URL"
           if [ -z "$PUSHGATEWAY_URL" ]; then
             echo "Erreur : pushgateway.url non défini dans config.yaml"
             exit 1
@@ -397,11 +431,19 @@ jobs:
             echo "Erreur : prometheus.url non défini dans config.yaml"
             exit 1
           fi
-          echo "PUSHGATEWAY_URL: $PUSHGATEWAY_URL"
-          echo "PROMETHEUS_URL: $PROMETHEUS_URL"
-          echo "Exporting variables for subsequent steps..."
+          echo "Exporting variables to GITHUB_ENV..."
           echo "PUSHGATEWAY_URL=$PUSHGATEWAY_URL" >> $GITHUB_ENV
           echo "PROMETHEUS_URL=$PROMETHEUS_URL" >> $GITHUB_ENV
+          echo "Verifying exported variables..."
+          echo "GITHUB_ENV content after export:"
+          cat $GITHUB_ENV
+        shell: bash
+
+      - name: Debug Environment Variables
+        run: |
+          echo "Checking environment variables..."
+          echo "PUSHGATEWAY_URL from env: $PUSHGATEWAY_URL"
+          echo "PROMETHEUS_URL from env: $PROMETHEUS_URL"
         shell: bash
 
       - name: Check tests directory structure
@@ -469,6 +511,7 @@ jobs:
 
       - name: Verify Metrics in Prometheus
         run: |
+          echo "PROMETHEUS_URL before verifying metrics: $PROMETHEUS_URL"
           if [ -z "$PROMETHEUS_URL" ]; then
             echo "Erreur : PROMETHEUS_URL n'est pas défini ou est vide"
             exit 1
@@ -498,8 +541,9 @@ jobs:
       - name: Record workflow metrics
         if: always()
         run: |
-          if [ -z "$PUSHGATEWAY_URL" ] || [ -z "$PROMETHEUS_URL" ]; then
-            echo "Erreur : PUSHGATEWAY_URL ou PROMETHEUS_URL n'est pas défini ou est vide"
+          echo "PUSHGATEWAY_URL before recording metrics: $PUSHGATEWAY_URL"
+          if [ -z "$PUSHGATEWAY_URL" ]; then
+            echo "Erreur : PUSHGATEWAY_URL n'est pas défini ou est vide"
             exit 1
           fi
           if [ ! -f start_time.txt ]; then
@@ -517,6 +561,7 @@ jobs:
       - name: Push error count metric
         if: failure()
         run: |
+          echo "PUSHGATEWAY_URL before pushing error count: $PUSHGATEWAY_URL"
           if [ -z "$PUSHGATEWAY_URL" ]; then
             echo "Erreur : PUSHGATEWAY_URL n'est pas défini ou est vide"
             exit 1
@@ -560,8 +605,11 @@ jobs:
           fi
           echo "Backend/config.yaml found"
           cat Backend/config.yaml
+          echo "Extracting URLs with yq..."
           PUSHGATEWAY_URL=$(yq .pushgateway.url Backend/config.yaml | tr -d '"')
           PROMETHEUS_URL=$(yq .prometheus.url Backend/config.yaml | tr -d '"')
+          echo "PUSHGATEWAY_URL extracted: $PUSHGATEWAY_URL"
+          echo "PROMETHEUS_URL extracted: $PROMETHEUS_URL"
           if [ -z "$PUSHGATEWAY_URL" ]; then
             echo "Erreur : pushgateway.url non défini dans config.yaml"
             exit 1
@@ -570,11 +618,19 @@ jobs:
             echo "Erreur : prometheus.url non défini dans config.yaml"
             exit 1
           fi
-          echo "PUSHGATEWAY_URL: $PUSHGATEWAY_URL"
-          echo "PROMETHEUS_URL: $PROMETHEUS_URL"
-          echo "Exporting variables for subsequent steps..."
+          echo "Exporting variables to GITHUB_ENV..."
           echo "PUSHGATEWAY_URL=$PUSHGATEWAY_URL" >> $GITHUB_ENV
           echo "PROMETHEUS_URL=$PROMETHEUS_URL" >> $GITHUB_ENV
+          echo "Verifying exported variables..."
+          echo "GITHUB_ENV content after export:"
+          cat $GITHUB_ENV
+        shell: bash
+
+      - name: Debug Environment Variables
+        run: |
+          echo "Checking environment variables..."
+          echo "PUSHGATEWAY_URL from env: $PUSHGATEWAY_URL"
+          echo "PROMETHEUS_URL from env: $PROMETHEUS_URL"
         shell: bash
 
       - name: Download build artifacts
@@ -629,6 +685,7 @@ jobs:
 
       - name: Verify Metrics in Prometheus
         run: |
+          echo "PROMETHEUS_URL before verifying metrics: $PROMETHEUS_URL"
           if [ -z "$PROMETHEUS_URL" ]; then
             echo "Erreur : PROMETHEUS_URL n'est pas défini ou est vide"
             exit 1
@@ -650,8 +707,9 @@ jobs:
       - name: Record deploy workflow metrics
         if: always()
         run: |
-          if [ -z "$PUSHGATEWAY_URL" ] || [ -z "$PROMETHEUS_URL" ]; then
-            echo "Erreur : PUSHGATEWAY_URL ou PROMETHEUS_URL n'est pas défini ou est vide"
+          echo "PUSHGATEWAY_URL before recording metrics: $PUSHGATEWAY_URL"
+          if [ -z "$PUSHGATEWAY_URL" ]; then
+            echo "Erreur : PUSHGATEWAY_URL n'est pas défini ou est vide"
             exit 1
           fi
           if [ ! -f start_time.txt ]; then
@@ -669,6 +727,7 @@ jobs:
       - name: Push error count metric
         if: failure()
         run: |
+          echo "PUSHGATEWAY_URL before pushing error count: $PUSHGATEWAY_URL"
           if [ -z "$PUSHGATEWAY_URL" ]; then
             echo "Erreur : PUSHGATEWAY_URL n'est pas défini ou est vide"
             exit 1
