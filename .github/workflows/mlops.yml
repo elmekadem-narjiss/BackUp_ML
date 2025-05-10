@@ -21,15 +21,15 @@ jobs:
 
       - name: Set Start Time
         run: |
-          echo "Creating start_time.txt..."
-          echo "$(date +%s)" > start_time.txt
-          if [ -f start_time.txt ]; then
-            echo "start_time.txt created successfully."
+          echo "Creating /github/workspace/start_time.txt..."
+          echo "$(date +%s)" > /github/workspace/start_time.txt
+          if [ -f /github/workspace/start_time.txt ]; then
+            echo "start_time.txt created successfully at /github/workspace/start_time.txt."
             echo "Content of start_time.txt:"
-            cat start_time.txt
-            echo "Size of start_time.txt: $(stat -c %s start_time.txt) bytes"
+            cat /github/workspace/start_time.txt
+            echo "Size of start_time.txt: $(stat -c %s /github/workspace/start_time.txt) bytes"
           else
-            echo "Erreur : start_time.txt n'a pas été créé"
+            echo "Erreur : start_time.txt n'a pas été créé à /github/workspace/start_time.txt"
             exit 1
           fi
         shell: bash
@@ -38,11 +38,11 @@ jobs:
         run: |
           echo "Current working directory after Set Start Time: $(pwd)"
           echo "Listing files after Set Start Time:"
-          ls -la
-          if [ -f start_time.txt ]; then
-            echo "start_time.txt exists after creation."
+          ls -la /github/workspace
+          if [ -f /github/workspace/start_time.txt ]; then
+            echo "start_time.txt exists after creation at /github/workspace/start_time.txt."
           else
-            echo "Erreur : start_time.txt n'existe pas après création"
+            echo "Erreur : start_time.txt n'existe pas après création à /github/workspace/start_time.txt"
             exit 1
           fi
         shell: bash
@@ -129,9 +129,9 @@ jobs:
         run: |
           echo "Current working directory during Verify config.yaml: $(pwd)"
           echo "Listing files before checking start_time.txt:"
-          ls -la
-          if [ ! -f start_time.txt ]; then
-            echo "Erreur : start_time.txt n'existe pas"
+          ls -la /github/workspace
+          if [ ! -f /github/workspace/start_time.txt ]; then
+            echo "Erreur : start_time.txt n'existe pas à /github/workspace/start_time.txt"
             exit 1
           fi
           if [ ! -f Backend/config.yaml ]; then
@@ -368,7 +368,7 @@ jobs:
         run: |
           echo "Current working directory before Record build workflow metrics: $(pwd)"
           echo "Listing files before Record build workflow metrics:"
-          ls -la
+          ls -la /github/workspace
         shell: bash
 
       - name: Record build workflow metrics
@@ -381,11 +381,11 @@ jobs:
             echo "Erreur : PUSHGATEWAY_URL n'est pas défini ou est vide"
             exit 1
           fi
-          if [ ! -f start_time.txt ]; then
-            echo "Erreur : start_time.txt n'existe pas"
+          if [ ! -f /github/workspace/start_time.txt ]; then
+            echo "Erreur : start_time.txt n'existe pas à /github/workspace/start_time.txt"
             exit 1
           fi
-          START_TIME=$(cat start_time.txt)
+          START_TIME=$(cat /github/workspace/start_time.txt)
           END_TIME=$(date +%s)
           DURATION=$((END_TIME - START_TIME))
           RUN_ID=${{ github.run_id }}
@@ -397,7 +397,7 @@ jobs:
         run: |
           echo "Current working directory before Push error count metric: $(pwd)"
           echo "Listing files before Push error count metric:"
-          ls -la
+          ls -la /github/workspace
         shell: bash
 
       - name: Push error count metric
@@ -427,15 +427,15 @@ jobs:
 
       - name: Set Start Time
         run: |
-          echo "Creating start_time.txt..."
-          echo "$(date +%s)" > start_time.txt
-          if [ -f start_time.txt ]; then
-            echo "start_time.txt created successfully."
+          echo "Creating /github/workspace/start_time.txt..."
+          echo "$(date +%s)" > /github/workspace/start_time.txt
+          if [ -f /github/workspace/start_time.txt ]; then
+            echo "start_time.txt created successfully at /github/workspace/start_time.txt."
             echo "Content of start_time.txt:"
-            cat start_time.txt
-            echo "Size of start_time.txt: $(stat -c %s start_time.txt) bytes"
+            cat /github/workspace/start_time.txt
+            echo "Size of start_time.txt: $(stat -c %s /github/workspace/start_time.txt) bytes"
           else
-            echo "Erreur : start_time.txt n'a pas été créé"
+            echo "Erreur : start_time.txt n'a pas été créé à /github/workspace/start_time.txt"
             exit 1
           fi
         shell: bash
@@ -444,11 +444,11 @@ jobs:
         run: |
           echo "Current working directory after Set Start Time: $(pwd)"
           echo "Listing files after Set Start Time:"
-          ls -la
-          if [ -f start_time.txt ]; then
-            echo "start_time.txt exists after creation."
+          ls -la /github/workspace
+          if [ -f /github/workspace/start_time.txt ]; then
+            echo "start_time.txt exists after creation at /github/workspace/start_time.txt."
           else
-            echo "Erreur : start_time.txt n'existe pas après création"
+            echo "Erreur : start_time.txt n'existe pas après création à /github/workspace/start_time.txt"
             exit 1
           fi
         shell: bash
@@ -500,9 +500,9 @@ jobs:
         run: |
           echo "Current working directory during Verify config.yaml: $(pwd)"
           echo "Listing files before checking start_time.txt:"
-          ls -la
-          if [ ! -f start_time.txt ]; then
-            echo "Erreur : start_time.txt n'existe pas"
+          ls -la /github/workspace
+          if [ ! -f /github/workspace/start_time.txt ]; then
+            echo "Erreur : start_time.txt n'existe pas à /github/workspace/start_time.txt"
             exit 1
           fi
           if [ ! -f Backend/config.yaml ]; then
@@ -638,7 +638,7 @@ jobs:
         run: |
           echo "Current working directory before Record workflow metrics: $(pwd)"
           echo "Listing files before Record workflow metrics:"
-          ls -la
+          ls -la /github/workspace
         shell: bash
 
       - name: Record workflow metrics
@@ -651,11 +651,11 @@ jobs:
             echo "Erreur : PUSHGATEWAY_URL n'est pas défini ou est vide"
             exit 1
           fi
-          if [ ! -f start_time.txt ]; then
-            echo "Erreur : start_time.txt n'existe pas"
+          if [ ! -f /github/workspace/start_time.txt ]; then
+            echo "Erreur : start_time.txt n'existe pas à /github/workspace/start_time.txt"
             exit 1
           fi
-          START_TIME=$(cat start_time.txt)
+          START_TIME=$(cat /github/workspace/start_time.txt)
           END_TIME=$(date +%s)
           DURATION=$((END_TIME - START_TIME))
           RUN_ID=${{ github.run_id }}
@@ -667,7 +667,7 @@ jobs:
         run: |
           echo "Current working directory before Push error count metric: $(pwd)"
           echo "Listing files before Push error count metric:"
-          ls -la
+          ls -la /github/workspace
         shell: bash
 
       - name: Push error count metric
@@ -697,15 +697,15 @@ jobs:
 
       - name: Set Start Time
         run: |
-          echo "Creating start_time.txt..."
-          echo "$(date +%s)" > start_time.txt
-          if [ -f start_time.txt ]; then
-            echo "start_time.txt created successfully."
+          echo "Creating /github/workspace/start_time.txt..."
+          echo "$(date +%s)" > /github/workspace/start_time.txt
+          if [ -f /github/workspace/start_time.txt ]; then
+            echo "start_time.txt created successfully at /github/workspace/start_time.txt."
             echo "Content of start_time.txt:"
-            cat start_time.txt
-            echo "Size of start_time.txt: $(stat -c %s start_time.txt) bytes"
+            cat /github/workspace/start_time.txt
+            echo "Size of start_time.txt: $(stat -c %s /github/workspace/start_time.txt) bytes"
           else
-            echo "Erreur : start_time.txt n'a pas été créé"
+            echo "Erreur : start_time.txt n'a pas été créé à /github/workspace/start_time.txt"
             exit 1
           fi
         shell: bash
@@ -714,11 +714,11 @@ jobs:
         run: |
           echo "Current working directory after Set Start Time: $(pwd)"
           echo "Listing files after Set Start Time:"
-          ls -la
-          if [ -f start_time.txt ]; then
-            echo "start_time.txt exists after creation."
+          ls -la /github/workspace
+          if [ -f /github/workspace/start_time.txt ]; then
+            echo "start_time.txt exists after creation at /github/workspace/start_time.txt."
           else
-            echo "Erreur : start_time.txt n'existe pas après création"
+            echo "Erreur : start_time.txt n'existe pas après création à /github/workspace/start_time.txt"
             exit 1
           fi
         shell: bash
@@ -739,9 +739,9 @@ jobs:
         run: |
           echo "Current working directory during Verify config.yaml: $(pwd)"
           echo "Listing files before checking start_time.txt:"
-          ls -la
-          if [ ! -f start_time.txt ]; then
-            echo "Erreur : start_time.txt n'existe pas"
+          ls -la /github/workspace
+          if [ ! -f /github/workspace/start_time.txt ]; then
+            echo "Erreur : start_time.txt n'existe pas à /github/workspace/start_time.txt"
             exit 1
           fi
           if [ ! -f Backend/config.yaml ]; then
@@ -856,7 +856,7 @@ jobs:
         run: |
           echo "Current working directory before Record deploy workflow metrics: $(pwd)"
           echo "Listing files before Record deploy workflow metrics:"
-          ls -la
+          ls -la /github/workspace
         shell: bash
 
       - name: Record deploy workflow metrics
@@ -869,11 +869,11 @@ jobs:
             echo "Erreur : PUSHGATEWAY_URL n'est pas défini ou est vide"
             exit 1
           fi
-          if [ ! -f start_time.txt ]; then
-            echo "Erreur : start_time.txt n'existe pas"
+          if [ ! -f /github/workspace/start_time.txt ]; then
+            echo "Erreur : start_time.txt n'existe pas à /github/workspace/start_time.txt"
             exit 1
           fi
-          START_TIME=$(cat start_time.txt)
+          START_TIME=$(cat /github/workspace/start_time.txt)
           END_TIME=$(date +%s)
           DURATION=$((END_TIME - START_TIME))
           RUN_ID=${{ github.run_id }}
@@ -885,7 +885,7 @@ jobs:
         run: |
           echo "Current working directory before Push error count metric: $(pwd)"
           echo "Listing files before Push error count metric:"
-          ls -la
+          ls -la /github/workspace
         shell: bash
 
       - name: Push error count metric
