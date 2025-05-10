@@ -26,9 +26,9 @@ jobs:
         with:
           python-version: '3.9'
 
-      - name: Install yq
+      - name: Install yq (stable version)
         run: |
-          sudo wget -qO /usr/local/bin/yq https://github.com/mikefarah/yq/releases/latest/download/yq_linux_amd64
+          sudo wget -qO /usr/local/bin/yq https://github.com/mikefarah/yq/releases/download/v4.44.3/yq_linux_amd64
           sudo chmod +x /usr/local/bin/yq
           yq --version
         shell: bash
@@ -162,7 +162,9 @@ jobs:
 
       - name: Check Pushgateway accessibility
         run: |
-          echo "PUSHGATEWAY_URL before check: $PUSHGATEWAY_URL"
+          echo "Extracting PUSHGATEWAY_URL for this step..."
+          PUSHGATEWAY_URL=$(yq .pushgateway.url Backend/config.yaml | tr -d '"')
+          echo "PUSHGATEWAY_URL for this step: $PUSHGATEWAY_URL"
           if [ -z "$PUSHGATEWAY_URL" ]; then
             echo "Erreur : PUSHGATEWAY_URL n'est pas défini ou est vide"
             exit 1
@@ -184,7 +186,9 @@ jobs:
       - name: Push selected MLFlow metrics to Pushgateway
         run: |
           source venv/bin/activate
-          echo "PUSHGATEWAY_URL before pushing metrics: $PUSHGATEWAY_URL"
+          echo "Extracting PUSHGATEWAY_URL for this step..."
+          PUSHGATEWAY_URL=$(yq .pushgateway.url Backend/config.yaml | tr -d '"')
+          echo "PUSHGATEWAY_URL for this step: $PUSHGATEWAY_URL"
           if [ -z "$PUSHGATEWAY_URL" ]; then
             echo "Erreur : PUSHGATEWAY_URL n'est pas défini ou est vide"
             exit 1
@@ -209,7 +213,9 @@ jobs:
       - name: Push PPO metrics to Pushgateway
         run: |
           source venv/bin/activate
-          echo "PUSHGATEWAY_URL before pushing PPO metrics: $PUSHGATEWAY_URL"
+          echo "Extracting PUSHGATEWAY_URL for this step..."
+          PUSHGATEWAY_URL=$(yq .pushgateway.url Backend/config.yaml | tr -d '"')
+          echo "PUSHGATEWAY_URL for this step: $PUSHGATEWAY_URL"
           if [ -z "$PUSHGATEWAY_URL" ]; then
             echo "Erreur : PUSHGATEWAY_URL n'est pas défini ou est vide"
             exit 1
@@ -266,7 +272,9 @@ jobs:
       - name: Push global success metric to Pushgateway
         if: success()
         run: |
-          echo "PUSHGATEWAY_URL before pushing success metric: $PUSHGATEWAY_URL"
+          echo "Extracting PUSHGATEWAY_URL for this step..."
+          PUSHGATEWAY_URL=$(yq .pushgateway.url Backend/config.yaml | tr -d '"')
+          echo "PUSHGATEWAY_URL for this step: $PUSHGATEWAY_URL"
           if [ -z "$PUSHGATEWAY_URL" ]; then
             echo "Erreur : PUSHGATEWAY_URL n'est pas défini ou est vide"
             exit 1
@@ -277,7 +285,9 @@ jobs:
 
       - name: Check metrics in Pushgateway
         run: |
-          echo "PUSHGATEWAY_URL before checking metrics: $PUSHGATEWAY_URL"
+          echo "Extracting PUSHGATEWAY_URL for this step..."
+          PUSHGATEWAY_URL=$(yq .pushgateway.url Backend/config.yaml | tr -d '"')
+          echo "PUSHGATEWAY_URL for this step: $PUSHGATEWAY_URL"
           if [ -z "$PUSHGATEWAY_URL" ]; then
             echo "Erreur : PUSHGATEWAY_URL n'est pas défini ou est vide"
             exit 1
@@ -288,7 +298,9 @@ jobs:
 
       - name: Verify Metrics in Prometheus
         run: |
-          echo "PROMETHEUS_URL before verifying metrics: $PROMETHEUS_URL"
+          echo "Extracting PROMETHEUS_URL for this step..."
+          PROMETHEUS_URL=$(yq .prometheus.url Backend/config.yaml | tr -d '"')
+          echo "PROMETHEUS_URL for this step: $PROMETHEUS_URL"
           if [ -z "$PROMETHEUS_URL" ]; then
             echo "Erreur : PROMETHEUS_URL n'est pas défini ou est vide"
             exit 1
@@ -323,7 +335,9 @@ jobs:
       - name: Record build workflow metrics
         if: always()
         run: |
-          echo "PUSHGATEWAY_URL before recording metrics: $PUSHGATEWAY_URL"
+          echo "Extracting PUSHGATEWAY_URL for this step..."
+          PUSHGATEWAY_URL=$(yq .pushgateway.url Backend/config.yaml | tr -d '"')
+          echo "PUSHGATEWAY_URL for this step: $PUSHGATEWAY_URL"
           if [ -z "$PUSHGATEWAY_URL" ]; then
             echo "Erreur : PUSHGATEWAY_URL n'est pas défini ou est vide"
             exit 1
@@ -343,7 +357,9 @@ jobs:
       - name: Push error count metric
         if: failure()
         run: |
-          echo "PUSHGATEWAY_URL before pushing error count: $PUSHGATEWAY_URL"
+          echo "Extracting PUSHGATEWAY_URL for this step..."
+          PUSHGATEWAY_URL=$(yq .pushgateway.url Backend/config.yaml | tr -d '"')
+          echo "PUSHGATEWAY_URL for this step: $PUSHGATEWAY_URL"
           if [ -z "$PUSHGATEWAY_URL" ]; then
             echo "Erreur : PUSHGATEWAY_URL n'est pas défini ou est vide"
             exit 1
@@ -370,9 +386,9 @@ jobs:
         with:
           python-version: '3.9'
 
-      - name: Install yq
+      - name: Install yq (stable version)
         run: |
-          sudo wget -qO /usr/local/bin/yq https://github.com/mikefarah/yq/releases/latest/download/yq_linux_amd64
+          sudo wget -qO /usr/local/bin/yq https://github.com/mikefarah/yq/releases/download/v4.44.3/yq_linux_amd64
           sudo chmod +x /usr/local/bin/yq
           yq --version
         shell: bash
@@ -511,7 +527,9 @@ jobs:
 
       - name: Verify Metrics in Prometheus
         run: |
-          echo "PROMETHEUS_URL before verifying metrics: $PROMETHEUS_URL"
+          echo "Extracting PROMETHEUS_URL for this step..."
+          PROMETHEUS_URL=$(yq .prometheus.url Backend/config.yaml | tr -d '"')
+          echo "PROMETHEUS_URL for this step: $PROMETHEUS_URL"
           if [ -z "$PROMETHEUS_URL" ]; then
             echo "Erreur : PROMETHEUS_URL n'est pas défini ou est vide"
             exit 1
@@ -541,7 +559,9 @@ jobs:
       - name: Record workflow metrics
         if: always()
         run: |
-          echo "PUSHGATEWAY_URL before recording metrics: $PUSHGATEWAY_URL"
+          echo "Extracting PUSHGATEWAY_URL for this step..."
+          PUSHGATEWAY_URL=$(yq .pushgateway.url Backend/config.yaml | tr -d '"')
+          echo "PUSHGATEWAY_URL for this step: $PUSHGATEWAY_URL"
           if [ -z "$PUSHGATEWAY_URL" ]; then
             echo "Erreur : PUSHGATEWAY_URL n'est pas défini ou est vide"
             exit 1
@@ -561,7 +581,9 @@ jobs:
       - name: Push error count metric
         if: failure()
         run: |
-          echo "PUSHGATEWAY_URL before pushing error count: $PUSHGATEWAY_URL"
+          echo "Extracting PUSHGATEWAY_URL for this step..."
+          PUSHGATEWAY_URL=$(yq .pushgateway.url Backend/config.yaml | tr -d '"')
+          echo "PUSHGATEWAY_URL for this step: $PUSHGATEWAY_URL"
           if [ -z "$PUSHGATEWAY_URL" ]; then
             echo "Erreur : PUSHGATEWAY_URL n'est pas défini ou est vide"
             exit 1
@@ -585,9 +607,9 @@ jobs:
         with:
           fetch-depth: 0  # Fetch all history for proper git operations
 
-      - name: Install yq
+      - name: Install yq (stable version)
         run: |
-          sudo wget -qO /usr/local/bin/yq https://github.com/mikefarah/yq/releases/latest/download/yq_linux_amd64
+          sudo wget -qO /usr/local/bin/yq https://github.com/mikefarah/yq/releases/download/v4.44.3/yq_linux_amd64
           sudo chmod +x /usr/local/bin/yq
           yq --version
         shell: bash
@@ -685,7 +707,9 @@ jobs:
 
       - name: Verify Metrics in Prometheus
         run: |
-          echo "PROMETHEUS_URL before verifying metrics: $PROMETHEUS_URL"
+          echo "Extracting PROMETHEUS_URL for this step..."
+          PROMETHEUS_URL=$(yq .prometheus.url Backend/config.yaml | tr -d '"')
+          echo "PROMETHEUS_URL for this step: $PROMETHEUS_URL"
           if [ -z "$PROMETHEUS_URL" ]; then
             echo "Erreur : PROMETHEUS_URL n'est pas défini ou est vide"
             exit 1
@@ -707,7 +731,9 @@ jobs:
       - name: Record deploy workflow metrics
         if: always()
         run: |
-          echo "PUSHGATEWAY_URL before recording metrics: $PUSHGATEWAY_URL"
+          echo "Extracting PUSHGATEWAY_URL for this step..."
+          PUSHGATEWAY_URL=$(yq .pushgateway.url Backend/config.yaml | tr -d '"')
+          echo "PUSHGATEWAY_URL for this step: $PUSHGATEWAY_URL"
           if [ -z "$PUSHGATEWAY_URL" ]; then
             echo "Erreur : PUSHGATEWAY_URL n'est pas défini ou est vide"
             exit 1
@@ -727,7 +753,9 @@ jobs:
       - name: Push error count metric
         if: failure()
         run: |
-          echo "PUSHGATEWAY_URL before pushing error count: $PUSHGATEWAY_URL"
+          echo "Extracting PUSHGATEWAY_URL for this step..."
+          PUSHGATEWAY_URL=$(yq .pushgateway.url Backend/config.yaml | tr -d '"')
+          echo "PUSHGATEWAY_URL for this step: $PUSHGATEWAY_URL"
           if [ -z "$PUSHGATEWAY_URL" ]; then
             echo "Erreur : PUSHGATEWAY_URL n'est pas défini ou est vide"
             exit 1
