@@ -244,6 +244,10 @@ jobs:
       - name: Push global success metric to Pushgateway
         if: success()
         run: |
+          if [ -z "$PUSHGATEWAY_URL" ]; then
+            echo "Erreur : PUSHGATEWAY_URL n'est pas défini ou est vide"
+            exit 1
+          fi
           RUN_ID=${{ github.run_id }}
           echo "success{job=\"mlflow_and_snakemake_metrics\",run_id=\"$RUN_ID\"} 1" | curl -s -L --data-binary @- "$PUSHGATEWAY_URL/metrics/job/mlflow_and_snakemake_metrics"
         shell: bash
@@ -294,10 +298,6 @@ jobs:
       - name: Record build workflow metrics
         if: always()
         run: |
-          if [ -z "$PUSHGATEWAY_URL" ] || [ -z "$PROMETHEUS_URL" ]; then
-            echo "Erreur : PUSHGATEWAY_URL ou PROMETHEUS_URL n'est pas défini ou est vide"
-            exit 1
-          fi
           if [ ! -f start_time.txt ]; then
             echo "Erreur : start_time.txt n'existe pas"
             exit 1
@@ -313,6 +313,10 @@ jobs:
       - name: Push error count metric
         if: failure()
         run: |
+          if [ -z "$PUSHGATEWAY_URL" ]; then
+            echo "Erreur : PUSHGATEWAY_URL n'est pas défini ou est vide"
+            exit 1
+          fi
           RUN_ID=${{ github.run_id }}
           echo "error_count{job=\"build\",repository=\"${{ github.repository }}\",run_id=\"$RUN_ID\"} 1" | curl -s -L --data-binary @- "$PUSHGATEWAY_URL/metrics/job/workflow_metrics"
         shell: bash
@@ -513,6 +517,10 @@ jobs:
       - name: Push error count metric
         if: failure()
         run: |
+          if [ -z "$PUSHGATEWAY_URL" ]; then
+            echo "Erreur : PUSHGATEWAY_URL n'est pas défini ou est vide"
+            exit 1
+          fi
           RUN_ID=${{ github.run_id }}
           echo "error_count{job=\"integration-test\",repository=\"${{ github.repository }}\",run_id=\"$RUN_ID\"} 1" | curl -s -L --data-binary @- "$PUSHGATEWAY_URL/metrics/job/workflow_metrics"
         shell: bash
@@ -661,6 +669,10 @@ jobs:
       - name: Push error count metric
         if: failure()
         run: |
+          if [ -z "$PUSHGATEWAY_URL" ]; then
+            echo "Erreur : PUSHGATEWAY_URL n'est pas défini ou est vide"
+            exit 1
+          fi
           RUN_ID=${{ github.run_id }}
           echo "error_count{job=\"deploy\",repository=\"${{ github.repository }}\",run_id=\"$RUN_ID\"} 1" | curl -s -L --data-binary @- "$PUSHGATEWAY_URL/metrics/job/workflow_metrics"
         shell: bash
