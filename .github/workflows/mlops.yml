@@ -12,52 +12,22 @@ jobs:
   build:
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout code
-        uses: actions/checkout@v3
-
-      - name: Debug Working Directory Before Set Start Time
-        run: |
-          echo "Current working directory before Set Start Time: $(pwd)"
-          echo "Listing files before Set Start Time:"
-          ls -la /github/workspace
-        shell: bash
-
       - name: Set Start Time
         run: |
-          echo "Creating /github/workspace/start_time.txt..."
-          echo "$(date +%s)" > /github/workspace/start_time.txt
-          if [ -f /github/workspace/start_time.txt ]; then
-            echo "start_time.txt created successfully at /github/workspace/start_time.txt."
-            echo "Content of start_time.txt:"
-            cat /github/workspace/start_time.txt
-            echo "Size of start_time.txt: $(stat -c %s /github/workspace/start_time.txt) bytes"
-          else
-            echo "Erreur : start_time.txt n'a pas été créé à /github/workspace/start_time.txt"
-            exit 1
-          fi
+          echo "START_TIME=$(date +%s)" >> $GITHUB_ENV
         shell: bash
 
-      - name: Debug Working Directory After Set Start Time
-        run: |
-          echo "Current working directory after Set Start Time: $(pwd)"
-          echo "Listing files after Set Start Time:"
-          ls -la /github/workspace
-          if [ -f /github/workspace/start_time.txt ]; then
-            echo "start_time.txt exists after creation at /github/workspace/start_time.txt."
-          else
-            echo "Erreur : start_time.txt n'existe pas après création à /github/workspace/start_time.txt"
-            exit 1
-          fi
-        shell: bash
+      - name: Checkout code
+        uses: actions/checkout@v3
 
       - name: Set up Python
         uses: actions/setup-python@v4
         with:
           python-version: '3.9'
 
-      - name: Install yq (stable version)
+      - name: Install yq
         run: |
-          sudo wget -qO /usr/local/bin/yq https://github.com/mikefarah/yq/releases/download/v4.44.3/yq_linux_amd64
+          sudo wget -qO /usr/local/bin/yq https://github.com/mikefarah/yq/releases/latest/download/yq_linux_amd64
           sudo chmod +x /usr/local/bin/yq
           yq --version
         shell: bash
@@ -69,7 +39,6 @@ jobs:
           key: ${{ runner.os }}-venv-${{ hashFiles('Backend/requirements.txt') }}
           restore-keys: |
             ${{ runner.os }}-venv-
-
       - name: Verify requirements.txt
         run: |
           if [ ! -f Backend/requirements.txt ]; then
@@ -127,27 +96,20 @@ jobs:
 
       - name: Verify config.yaml
         run: |
-          echo "Current working directory during Verify config.yaml: $(pwd)"
-          echo "Listing files before checking start_time.txt:"
-          ls -la /github/workspace
-          if [ ! -f /github/workspace/start_time.txt ]; then
-            echo "Erreur : start_time.txt n'existe pas à /github/workspace/start_time.txt"
+          if [ -z "$START_TIME" ]; then
+            echo "Erreur : START_TIME n'est pas défini"
             exit 1
           fi
           if [ ! -f Backend/config.yaml ]; then
             echo "Error: Backend/config.yaml not found"
-            ls -R /github/workspace
+            ls -R Backend/
             exit 1
           fi
           echo "Backend/config.yaml found"
           cat Backend/config.yaml
-          echo "Extracting URLs with yq..."
           MLFLOW_URL=$(yq .mlflow.url Backend/config.yaml | tr -d '"')
           PUSHGATEWAY_URL=$(yq .pushgateway.url Backend/config.yaml | tr -d '"')
           PROMETHEUS_URL=$(yq .prometheus.url Backend/config.yaml | tr -d '"')
-          echo "MLFLOW_URL extracted: $MLFLOW_URL"
-          echo "PUSHGATEWAY_URL extracted: $PUSHGATEWAY_URL"
-          echo "PROMETHEUS_URL extracted: $PROMETHEUS_URL"
           if [ -z "$MLFLOW_URL" ]; then
             echo "Erreur : mlflow.url non défini dans config.yaml"
             exit 1
@@ -160,21 +122,13 @@ jobs:
             echo "Erreur : prometheus.url non défini dans config.yaml"
             exit 1
           fi
-          echo "Exporting variables to GITHUB_ENV..."
+          echo "MLFLOW_URL: $MLFLOW_URL"
+          echo "PUSHGATEWAY_URL: $PUSHGATEWAY_URL"
+          echo "PROMETHEUS_URL: $PROMETHEUS_URL"
+          echo "Exporting variables for subsequent steps..."
           echo "MLFLOW_URL=$MLFLOW_URL" >> $GITHUB_ENV
           echo "PUSHGATEWAY_URL=$PUSHGATEWAY_URL" >> $GITHUB_ENV
           echo "PROMETHEUS_URL=$PROMETHEUS_URL" >> $GITHUB_ENV
-          echo "Verifying exported variables..."
-          echo "GITHUB_ENV content after export:"
-          cat $GITHUB_ENV
-        shell: bash
-
-      - name: Debug Environment Variables
-        run: |
-          echo "Checking environment variables..."
-          echo "PUSHGATEWAY_URL from env: $PUSHGATEWAY_URL"
-          echo "PROMETHEUS_URL from env: $PROMETHEUS_URL"
-          echo "MLFLOW_URL from env: $MLFLOW_URL"
         shell: bash
 
       - name: Download notebook and scripts
@@ -194,17 +148,14 @@ jobs:
 
       - name: Check Pushgateway accessibility
         run: |
-          echo "Extracting PUSHGATEWAY_URL for this step..."
-          PUSHGATEWAY_URL=$(yq .pushgateway.url Backend/config.yaml | tr -d '"')
-          echo "PUSHGATEWAY_URL for this step: $PUSHGATEWAY_URL"
+          echo "Vérification de l'accessibilité de la Pushgateway : $PUSHGATEWAY_URL"
           if [ -z "$PUSHGATEWAY_URL" ]; then
             echo "Erreur : PUSHGATEWAY_URL n'est pas défini ou est vide"
             exit 1
           fi
-          RUN_ID=${{ github.run_id }}
           FULL_URL="$PUSHGATEWAY_URL/metrics/job/mlflow_and_snakemake_metrics"
           echo "Envoi de la métrique de test vers $FULL_URL"
-          STATUS=$(echo "test_accessibility{job=\"mlflow_and_snakemake_metrics\",run_id=\"$RUN_ID\"} 1" | curl -s -L -w "%{http_code}" --data-binary @- "$FULL_URL" -o /dev/null)
+          STATUS=$(echo "test_accessibility{job=\"mlflow_and_snakemake_metrics\"} 1" | curl -s -L -w "%{http_code}" --data-binary @- "$FULL_URL" -o /dev/null)
           if [ "$STATUS" -eq 200 ]; then
             echo "Pushgateway accessible, code HTTP : $STATUS"
             echo "Vérification de la métrique test_accessibility dans Pushgateway :"
@@ -215,48 +166,84 @@ jobs:
           fi
         shell: bash
 
-      - name: Push selected MLFlow metrics to Pushgateway
+      - name: Push selected MLFlow metrics to Pushgateway and Prometheus
         run: |
           source venv/bin/activate
-          echo "Extracting PUSHGATEWAY_URL for this step..."
-          PUSHGATEWAY_URL=$(yq .pushgateway.url Backend/config.yaml | tr -d '"')
-          echo "PUSHGATEWAY_URL for this step: $PUSHGATEWAY_URL"
-          if [ -z "$PUSHGATEWAY_URL" ]; then
-            echo "Erreur : PUSHGATEWAY_URL n'est pas défini ou est vide"
-            exit 1
-          fi
-          RUN_ID=${{ github.run_id }}
-          # MLFlow metrics for run 92f5893e1dbe4175a3f4313bc89c56b4
-          echo "mse{run=\"92f5893e1dbe4175a3f4313bc89c56b4\",job=\"mlflow_and_snakemake_metrics\",run_id=\"$RUN_ID\"} 0.039917658308037784" | curl -s -L --data-binary @- "$PUSHGATEWAY_URL/metrics/job/mlflow_and_snakemake_metrics"
-          echo "loss{run=\"92f5893e1dbe4175a3f4313bc89c56b4\",job=\"mlflow_and_snakemake_metrics\",run_id=\"$RUN_ID\"} 0.04144944250583649" | curl -s -L --data-binary @- "$PUSHGATEWAY_URL/metrics/job/mlflow_and_snakemake_metrics"
-          echo "mae{run=\"92f5893e1dbe4175a3f4313bc89c56b4\",job=\"mlflow_and_snakemake_metrics\",run_id=\"$RUN_ID\"} 0.1347774024638297" | curl -s -L --data-binary @- "$PUSHGATEWAY_URL/metrics/job/mlflow_and_snakemake_metrics"
-          echo "rmse{run=\"92f5893e1dbe4175a3f4313bc89c56b4\",job=\"mlflow_and_snakemake_metrics\",run_id=\"$RUN_ID\"} 0.19979403972100315" | curl -s -L --data-binary @- "$PUSHGATEWAY_URL/metrics/job/mlflow_and_snakemake_metrics"
-          echo "r2_score{run=\"92f5893e1dbe4175a3f4313bc89c56b4\",job=\"mlflow_and_snakemake_metrics\",run_id=\"$RUN_ID\"} 0.6619863834818595" | curl -s -L --data-binary @- "$PUSHGATEWAY_URL/metrics/job/mlflow_and_snakemake_metrics"
-          # MLFlow metrics for run ad0cf78265204f34b84a40aa09895c7f
-          echo "df_resid{run=\"ad0cf78265204f34b84a40aa09895c7f\",job=\"mlflow_and_snakemake_metrics\",run_id=\"$RUN_ID\"} 9999999" | curl -s -L --data-binary @- "$PUSHGATEWAY_URL/metrics/job/mlflow_and_snakemake_metrics"
-          echo "scale{run=\"ad0cf78265204f34b84a40aa09895c7f\",job=\"mlflow_and_snakemake_metrics\",run_id=\"$RUN_ID\"} 1" | curl -s -L --data-binary @- "$PUSHGATEWAY_URL/metrics/job/mlflow_and_snakemake_metrics"
-          echo "mse{run=\"ad0cf78265204f34b84a40aa09895c7f\",job=\"mlflow_and_snakemake_metrics\",run_id=\"$RUN_ID\"} 0.005455112014267468" | curl -s -L --data-binary @- "$PUSHGATEWAY_URL/metrics/job/mlflow_and_snakemake_metrics"
-          echo "bic{run=\"ad0cf78265204f34b84a40aa09895c7f\",job=\"mlflow_and_snakemake_metrics\",run_id=\"$RUN_ID\"} 3180.9434357641003" | curl -s -L --data-binary @- "$PUSHGATEWAY_URL/metrics/job/mlflow_and_snakemake_metrics"
-          echo "llf{run=\"ad0cf78265204f34b84a40aa09895c7f\",job=\"mlflow_and_snakemake_metrics\",run_id=\"$RUN_ID\"} -1573.7916355183975" | curl -s -L --data-binary @- "$PUSHGATEWAY_URL/metrics/job/mlflow_and_snakemake_metrics"
-          echo "aic{run=\"ad0cf78265204f34b84a40aa09895c7f\",job=\"mlflow_and_snakemake_metrics\",run_id=\"$RUN_ID\"} 3157.583271036795" | curl -s -L --data-binary @- "$PUSHGATEWAY_URL/metrics/job/mlflow_and_snakemake_metrics"
-          echo "df_model{run=\"ad0cf78265204f34b84a40aa09895c7f\",job=\"mlflow_and_snakemake_metrics\",run_id=\"$RUN_ID\"} 5" | curl -s -L --data-binary @- "$PUSHGATEWAY_URL/metrics/job/mlflow_and_snakemake_metrics"
-        shell: bash
-
-      - name: Push PPO metrics to Pushgateway
-        run: |
-          source venv/bin/activate
-          echo "Extracting PUSHGATEWAY_URL for this step..."
-          PUSHGATEWAY_URL=$(yq .pushgateway.url Backend/config.yaml | tr -d '"')
-          echo "PUSHGATEWAY_URL for this step: $PUSHGATEWAY_URL"
-          if [ -z "$PUSHGATEWAY_URL" ]; then
-            echo "Erreur : PUSHGATEWAY_URL n'est pas défini ou est vide"
-            exit 1
-          fi
-          RUN_ID=${{ github.run_id }}
+          declare -A metrics_92f5=(
+            [loss]=0.04144944250583649
+            [mae]=0.1347774024638297
+            [mse]=0.039917658308037784
+            [r2_score]=0.6619863834818595
+            [rmse]=0.19979403972100315
+          )
+          declare -A metrics_ad0c=(
+            [aic]=3157.583271036795
+            [bic]=3180.9434357641003
+            [df_model]=5
+            [df_resid]=Inf
+            [llf]=-1573.7916355183975
+            [mse]=0.005455112014267468
+            [scale]=1
+          )
+          TIMESTAMP=$(date +%s)
+          # Push to Pushgateway
+          echo "Envoi des métriques metrics_92f5 à Pushgateway..."
+          for key in "${!metrics_92f5[@]}"; do
+            value=${metrics_92f5[$key]}
+            echo "Envoi à Pushgateway : $key{run=\"92f5893e1dbe4175a3f4313bc89c56b4\",job=\"mlflow_and_snakemake_metrics\"} $value"
+            STATUS=$(echo "$key{run=\"92f5893e1dbe4175a3f4313bc89c56b4\",job=\"mlflow_and_snakemake_metrics\"} $value" | curl -s -L -w "%{http_code}" --data-binary @- "$PUSHGATEWAY_URL/metrics/job/mlflow_and_snakemake_metrics" -o /dev/null)
+            if [ "$STATUS" -eq 200 ]; then
+              echo "Succès : Métrique $key envoyée à Pushgateway, code HTTP $STATUS"
+            else
+              echo "Erreur : Échec de l'envoi de la métrique $key à Pushgateway, code HTTP $STATUS"
+              exit 1
+            fi
+          done
+          echo "Envoi des métriques metrics_ad0c à Pushgateway..."
+          for key in "${!metrics_ad0c[@]}"; do
+            value=${metrics_ad0c[$key]}
+            echo "Envoi à Pushgateway : $key{run=\"ad0cf78265204f34b84a40aa09895c7f\",job=\"mlflow_and_snakemake_metrics\"} $value"
+            STATUS=$(echo "$key{run=\"ad0cf78265204f34b84a40aa09895c7f\",job=\"mlflow_and_snakemake_metrics\"} $value" | curl -s -L -w "%{http_code}" --data-binary @- "$PUSHGATEWAY_URL/metrics/job/mlflow_and_snakemake_metrics" -o /dev/null)
+            if [ "$STATUS" -eq 200 ]; then
+              echo "Succès : Métrique $key envoyée à Pushgateway, code HTTP $STATUS"
+            else
+              echo "Erreur : Échec de l'envoi de la métrique $key à Pushgateway, code HTTP $STATUS"
+              exit 1
+            fi
+          done
+          # Push to Prometheus
+          DATA="json
+          {
+            \"streams\": [
+              {
+                \"labels\": {\"job\":\"mlflow_and_snakemake_metrics\", \"run\":\"92f5893e1dbe4175a3f4313bc89c56b4\"},
+                \"entries\": ["
+          for key in "${!metrics_92f5[@]}"; do
+            value=${metrics_92f5[$key]}
+            DATA+="{ \"ts\": \"$(date -u +%Y-%m-%dT%H:%M:%SZ)\", \"value\": $value },"
+          done
+          DATA=${DATA%,}
+          DATA+="]
+              },
+              {
+                \"labels\": {\"job\":\"mlflow_and_snakemake_metrics\", \"run\":\"ad0cf78265204f34b84a40aa09895c7f\"},
+                \"entries\": ["
+          for key in "${!metrics_ad0c[@]}"; do
+            value=${metrics_ad0c[$key]}
+            DATA+="{ \"ts\": \"$(date -u +%Y-%m-%dT%H:%M:%SZ)\", \"value\": $value },"
+          done
+          DATA=${DATA%,}
+          DATA+="]
+              }
+            ]
+          }"
+          echo "Envoi des métriques à Prometheus..."
+          echo "$DATA" | curl -s -X POST -H "Content-Type: application/json" -d @- "$PROMETHEUS_URL/api/v1/write" -o /dev/null
+          echo "Vérification des fichiers PPO JSON :"
           if [ -f output/ppo_bess_model_metrics.json ]; then
             echo "Fichier ppo_bess_model_metrics.json trouvé. Contenu :"
             cat output/ppo_bess_model_metrics.json | jq . || echo "Erreur : ppo_bess_model_metrics.json n'est pas un JSON valide"
-            TRAIN_METRICS=$(cat output/ppo_bess_model_metrics.json | jq -r 'to_entries[] | .key + "{run=\"ppo_training\",job=\"ppo_metrics\",run_id=\"'"$RUN_ID"'\"} " + (.value | tostring)')
+            TRAIN_METRICS=$(cat output/ppo_bess_model_metrics.json | jq -r 'to_entries[] | .key + "{run=\"ppo_training\",job=\"ppo_metrics\"} " + (.value | tostring)')
             if [ -z "$TRAIN_METRICS" ]; then
               echo "Erreur : Aucune métrique trouvée dans ppo_bess_model_metrics.json"
               exit 1
@@ -270,6 +257,21 @@ jobs:
                   echo "Erreur : Échec de l'envoi de la métrique PPO à Pushgateway, code HTTP $STATUS"
                   exit 1
                 fi
+                KEY=$(echo "$metric" | cut -d'{' -f1)
+                VALUE=$(echo "$metric" | cut -d' ' -f2)
+                DATA="json
+                {
+                  \"streams\": [
+                    {
+                      \"labels\": {\"job\":\"ppo_metrics\", \"run\":\"ppo_training\"},
+                      \"entries\": [
+                        { \"ts\": \"$(date -u +%Y-%m-%dT%H:%M:%SZ)\", \"value\": $VALUE }
+                      ]
+                    }
+                  ]
+                }"
+                echo "Envoi de la métrique PPO (entraînement) à Prometheus : $KEY=$VALUE"
+                echo "$DATA" | curl -s -X POST -H "Content-Type: application/json" -d @- "$PROMETHEUS_URL/api/v1/write" -o /dev/null
               done <<< "$TRAIN_METRICS"
             fi
           else
@@ -279,7 +281,7 @@ jobs:
           if [ -f output/evaluation_metrics.json ]; then
             echo "Fichier evaluation_metrics.json trouvé. Contenu :"
             cat output/evaluation_metrics.json | jq . || echo "Erreur : evaluation_metrics.json n'est pas un JSON valide"
-            EVAL_METRICS=$(cat output/evaluation_metrics.json | jq -r 'to_entries[] | .key + "{run=\"ppo_evaluation\",job=\"ppo_metrics\",run_id=\"'"$RUN_ID"'\"} " + (.value | tostring)')
+            EVAL_METRICS=$(cat output/evaluation_metrics.json | jq -r 'to_entries[] | .key + "{run=\"ppo_evaluation\",job=\"ppo_metrics\"} " + (.value | tostring)')
             if [ -z "$EVAL_METRICS" ]; then
               echo "Erreur : Aucune métrique trouvée dans evaluation_metrics.json"
               exit 1
@@ -293,6 +295,21 @@ jobs:
                   echo "Erreur : Échec de l'envoi de la métrique PPO à Pushgateway, code HTTP $STATUS"
                   exit 1
                 fi
+                KEY=$(echo "$metric" | cut -d'{' -f1)
+                VALUE=$(echo "$metric" | cut -d' ' -f2)
+                DATA="json
+                {
+                  \"streams\": [
+                    {
+                      \"labels\": {\"job\":\"ppo_metrics\", \"run\":\"ppo_evaluation\"},
+                      \"entries\": [
+                        { \"ts\": \"$(date -u +%Y-%m-%dT%H:%M:%SZ)\", \"value\": $VALUE }
+                      ]
+                    }
+                  ]
+                }"
+                echo "Envoi de la métrique PPO (évaluation) à Prometheus : $KEY=$VALUE"
+                echo "$DATA" | curl -s -X POST -H "Content-Type: application/json" -d @- "$PROMETHEUS_URL/api/v1/write" -o /dev/null
               done <<< "$EVAL_METRICS"
             fi
           else
@@ -301,25 +318,38 @@ jobs:
           fi
         shell: bash
 
-      - name: Push global success metric to Pushgateway
-        if: success()
+      - name: Push global success metric to Pushgateway and Prometheus
         run: |
-          echo "Extracting PUSHGATEWAY_URL for this step..."
-          PUSHGATEWAY_URL=$(yq .pushgateway.url Backend/config.yaml | tr -d '"')
-          echo "PUSHGATEWAY_URL for this step: $PUSHGATEWAY_URL"
-          if [ -z "$PUSHGATEWAY_URL" ]; then
-            echo "Erreur : PUSHGATEWAY_URL n'est pas défini ou est vide"
+          if [ -z "$PUSHGATEWAY_URL" ] || [ -z "$PROMETHEUS_URL" ]; then
+            echo "Erreur : PUSHGATEWAY_URL ou PROMETHEUS_URL n'est pas défini ou est vide"
             exit 1
           fi
-          RUN_ID=${{ github.run_id }}
-          echo "success{job=\"mlflow_and_snakemake_metrics\",run_id=\"$RUN_ID\"} 1" | curl -s -L --data-binary @- "$PUSHGATEWAY_URL/metrics/job/mlflow_and_snakemake_metrics"
+          # Push to Pushgateway
+          STATUS=$(echo "success{job=\"mlflow_and_snakemake_metrics\"} 1" | curl -s -L -w "%{http_code}" --data-binary @- "$PUSHGATEWAY_URL/metrics/job/mlflow_and_snakemake_metrics" -o /dev/null)
+          if [ "$STATUS" -eq 200 ]; then
+            echo "Succès : Métrique success envoyée à Pushgateway, code HTTP $STATUS"
+          else
+            echo "Erreur : Échec de l'envoi de la métrique success à Pushgateway, code HTTP $STATUS"
+            exit 1
+          fi
+          # Push to Prometheus
+          DATA="json
+          {
+            \"streams\": [
+              {
+                \"labels\": {\"job\":\"mlflow_and_snakemake_metrics\"},
+                \"entries\": [
+                  { \"ts\": \"$(date -u +%Y-%m-%dT%H:%M:%SZ)\", \"value\": 1 }
+                ]
+              }
+            ]
+          }"
+          echo "Envoi de la métrique success à Prometheus..."
+          echo "$DATA" | curl -s -X POST -H "Content-Type: application/json" -d @- "$PROMETHEUS_URL/api/v1/write" -o /dev/null
         shell: bash
 
       - name: Check metrics in Pushgateway
         run: |
-          echo "Extracting PUSHGATEWAY_URL for this step..."
-          PUSHGATEWAY_URL=$(yq .pushgateway.url Backend/config.yaml | tr -d '"')
-          echo "PUSHGATEWAY_URL for this step: $PUSHGATEWAY_URL"
           if [ -z "$PUSHGATEWAY_URL" ]; then
             echo "Erreur : PUSHGATEWAY_URL n'est pas défini ou est vide"
             exit 1
@@ -330,9 +360,6 @@ jobs:
 
       - name: Verify Metrics in Prometheus
         run: |
-          echo "Extracting PROMETHEUS_URL for this step..."
-          PROMETHEUS_URL=$(yq .prometheus.url Backend/config.yaml | tr -d '"')
-          echo "PROMETHEUS_URL for this step: $PROMETHEUS_URL"
           if [ -z "$PROMETHEUS_URL" ]; then
             echo "Erreur : PROMETHEUS_URL n'est pas défini ou est vide"
             exit 1
@@ -355,7 +382,6 @@ jobs:
             output/ppo_bess_model_metrics.json
             output/evaluation_metrics.json
             output/ppo_pipeline_executed.ipynb
-
       - name: Notify on build results
         if: always()
         run: |
@@ -364,106 +390,53 @@ jobs:
           ${{ secrets.SLACK_WEBHOOK_URL }}
         shell: bash
 
-      - name: Debug Working Directory Before Record Metrics
-        run: |
-          echo "Current working directory before Record build workflow metrics: $(pwd)"
-          echo "Listing files before Record build workflow metrics:"
-          ls -la /github/workspace
-        shell: bash
-
       - name: Record build workflow metrics
-        if: always()
         run: |
-          echo "Extracting PUSHGATEWAY_URL for this step..."
-          PUSHGATEWAY_URL=$(yq .pushgateway.url Backend/config.yaml | tr -d '"')
-          echo "PUSHGATEWAY_URL for this step: $PUSHGATEWAY_URL"
-          if [ -z "$PUSHGATEWAY_URL" ]; then
-            echo "Erreur : PUSHGATEWAY_URL n'est pas défini ou est vide"
+          if [ -z "$PUSHGATEWAY_URL" ] || [ -z "$PROMETHEUS_URL" ] || [ -z "$START_TIME" ]; then
+            echo "Erreur : PUSHGATEWAY_URL, PROMETHEUS_URL ou START_TIME n'est pas défini ou est vide"
             exit 1
           fi
-          if [ ! -f /github/workspace/start_time.txt ]; then
-            echo "Erreur : start_time.txt n'existe pas à /github/workspace/start_time.txt"
-            exit 1
-          fi
-          START_TIME=$(cat /github/workspace/start_time.txt)
           END_TIME=$(date +%s)
           DURATION=$((END_TIME - START_TIME))
-          RUN_ID=${{ github.run_id }}
           echo "Durée du job build : $DURATION secondes"
-          echo "workflow_duration{job=\"build\",repository=\"${{ github.repository }}\",run_id=\"$RUN_ID\"} $DURATION" | curl -s -L --data-binary @- "$PUSHGATEWAY_URL/metrics/job/workflow_metrics"
-        shell: bash
-
-      - name: Debug Working Directory Before Push Error Count
-        run: |
-          echo "Current working directory before Push error count metric: $(pwd)"
-          echo "Listing files before Push error count metric:"
-          ls -la /github/workspace
-        shell: bash
-
-      - name: Push error count metric
-        if: failure()
-        run: |
-          echo "Extracting PUSHGATEWAY_URL for this step..."
-          PUSHGATEWAY_URL=$(yq .pushgateway.url Backend/config.yaml | tr -d '"')
-          echo "PUSHGATEWAY_URL for this step: $PUSHGATEWAY_URL"
-          if [ -z "$PUSHGATEWAY_URL" ]; then
-            echo "Erreur : PUSHGATEWAY_URL n'est pas défini ou est vide"
-            exit 1
-          fi
-          RUN_ID=${{ github.run_id }}
-          echo "error_count{job=\"build\",repository=\"${{ github.repository }}\",run_id=\"$RUN_ID\"} 1" | curl -s -L --data-binary @- "$PUSHGATEWAY_URL/metrics/job/workflow_metrics"
+          # Push to Pushgateway
+          echo "workflow_duration{job=\"build\",repository=\"${{ github.repository }}\"} $DURATION" | curl -s -L --data-binary @- "$PUSHGATEWAY_URL/metrics/job/workflow_metrics"
+          # Push to Prometheus
+          DATA="json
+          {
+            \"streams\": [
+              {
+                \"labels\": {\"job\":\"workflow_metrics\", \"repository\":\"${{ github.repository }}\", \"job_name\":\"build\"},
+                \"entries\": [
+                  { \"ts\": \"$(date -u +%Y-%m-%dT%H:%M:%SZ)\", \"value\": $DURATION }
+                ]
+              }
+            ]
+          }"
+          echo "Envoi de la métrique workflow_duration à Prometheus..."
+          echo "$DATA" | curl -s -X POST -H "Content-Type: application/json" -d @- "$PROMETHEUS_URL/api/v1/write" -o /dev/null
         shell: bash
 
   integration-test:
     runs-on: ubuntu-latest
     needs: build
     steps:
-      - name: Checkout code
-        uses: actions/checkout@v3
-
-      - name: Debug Working Directory Before Set Start Time
-        run: |
-          echo "Current working directory before Set Start Time: $(pwd)"
-          echo "Listing files before Set Start Time:"
-          ls -la /github/workspace
-        shell: bash
-
       - name: Set Start Time
         run: |
-          echo "Creating /github/workspace/start_time.txt..."
-          echo "$(date +%s)" > /github/workspace/start_time.txt
-          if [ -f /github/workspace/start_time.txt ]; then
-            echo "start_time.txt created successfully at /github/workspace/start_time.txt."
-            echo "Content of start_time.txt:"
-            cat /github/workspace/start_time.txt
-            echo "Size of start_time.txt: $(stat -c %s /github/workspace/start_time.txt) bytes"
-          else
-            echo "Erreur : start_time.txt n'a pas été créé à /github/workspace/start_time.txt"
-            exit 1
-          fi
+          echo "START_TIME=$(date +%s)" >> $GITHUB_ENV
         shell: bash
 
-      - name: Debug Working Directory After Set Start Time
-        run: |
-          echo "Current working directory after Set Start Time: $(pwd)"
-          echo "Listing files after Set Start Time:"
-          ls -la /github/workspace
-          if [ -f /github/workspace/start_time.txt ]; then
-            echo "start_time.txt exists after creation at /github/workspace/start_time.txt."
-          else
-            echo "Erreur : start_time.txt n'existe pas après création à /github/workspace/start_time.txt"
-            exit 1
-          fi
-        shell: bash
+      - name: Checkout code
+        uses: actions/checkout@v3
 
       - name: Set up Python
         uses: actions/setup-python@v4
         with:
           python-version: '3.9'
 
-      - name: Install yq (stable version)
+      - name: Install yq
         run: |
-          sudo wget -qO /usr/local/bin/yq https://github.com/mikefarah/yq/releases/download/v4.44.3/yq_linux_amd64
+          sudo wget -qO /usr/local/bin/yq https://github.com/mikefarah/yq/releases/latest/download/yq_linux_amd64
           sudo chmod +x /usr/local/bin/yq
           yq --version
         shell: bash
@@ -475,7 +448,6 @@ jobs:
           key: ${{ runner.os }}-venv-${{ hashFiles('Backend/requirements.txt') }}
           restore-keys: |
             ${{ runner.os }}-venv-
-
       - name: Verify requirements.txt
         run: |
           if [ ! -f Backend/requirements.txt ]; then
@@ -498,25 +470,19 @@ jobs:
 
       - name: Verify config.yaml
         run: |
-          echo "Current working directory during Verify config.yaml: $(pwd)"
-          echo "Listing files before checking start_time.txt:"
-          ls -la /github/workspace
-          if [ ! -f /github/workspace/start_time.txt ]; then
-            echo "Erreur : start_time.txt n'existe pas à /github/workspace/start_time.txt"
+          if [ -z "$START_TIME" ]; then
+            echo "Erreur : START_TIME n'est pas défini"
             exit 1
           fi
           if [ ! -f Backend/config.yaml ]; then
             echo "Error: Backend/config.yaml not found"
-            ls -R /github/workspace
+            ls -R Backend/
             exit 1
           fi
           echo "Backend/config.yaml found"
           cat Backend/config.yaml
-          echo "Extracting URLs with yq..."
           PUSHGATEWAY_URL=$(yq .pushgateway.url Backend/config.yaml | tr -d '"')
           PROMETHEUS_URL=$(yq .prometheus.url Backend/config.yaml | tr -d '"')
-          echo "PUSHGATEWAY_URL extracted: $PUSHGATEWAY_URL"
-          echo "PROMETHEUS_URL extracted: $PROMETHEUS_URL"
           if [ -z "$PUSHGATEWAY_URL" ]; then
             echo "Erreur : pushgateway.url non défini dans config.yaml"
             exit 1
@@ -525,19 +491,11 @@ jobs:
             echo "Erreur : prometheus.url non défini dans config.yaml"
             exit 1
           fi
-          echo "Exporting variables to GITHUB_ENV..."
+          echo "PUSHGATEWAY_URL: $PUSHGATEWAY_URL"
+          echo "PROMETHEUS_URL: $PROMETHEUS_URL"
+          echo "Exporting variables for subsequent steps..."
           echo "PUSHGATEWAY_URL=$PUSHGATEWAY_URL" >> $GITHUB_ENV
           echo "PROMETHEUS_URL=$PROMETHEUS_URL" >> $GITHUB_ENV
-          echo "Verifying exported variables..."
-          echo "GITHUB_ENV content after export:"
-          cat $GITHUB_ENV
-        shell: bash
-
-      - name: Debug Environment Variables
-        run: |
-          echo "Checking environment variables..."
-          echo "PUSHGATEWAY_URL from env: $PUSHGATEWAY_URL"
-          echo "PROMETHEUS_URL from env: $PROMETHEUS_URL"
         shell: bash
 
       - name: Check tests directory structure
@@ -605,9 +563,6 @@ jobs:
 
       - name: Verify Metrics in Prometheus
         run: |
-          echo "Extracting PROMETHEUS_URL for this step..."
-          PROMETHEUS_URL=$(yq .prometheus.url Backend/config.yaml | tr -d '"')
-          echo "PROMETHEUS_URL for this step: $PROMETHEUS_URL"
           if [ -z "$PROMETHEUS_URL" ]; then
             echo "Erreur : PROMETHEUS_URL n'est pas défini ou est vide"
             exit 1
@@ -625,7 +580,6 @@ jobs:
             test-results.xml
             report.html
             *.log
-
       - name: Notify on test results
         if: always()
         run: |
@@ -634,128 +588,69 @@ jobs:
           ${{ secrets.SLACK_WEBHOOK_URL }}
         shell: bash
 
-      - name: Debug Working Directory Before Record Metrics
-        run: |
-          echo "Current working directory before Record workflow metrics: $(pwd)"
-          echo "Listing files before Record workflow metrics:"
-          ls -la /github/workspace
-        shell: bash
-
       - name: Record workflow metrics
-        if: always()
         run: |
-          echo "Extracting PUSHGATEWAY_URL for this step..."
-          PUSHGATEWAY_URL=$(yq .pushgateway.url Backend/config.yaml | tr -d '"')
-          echo "PUSHGATEWAY_URL for this step: $PUSHGATEWAY_URL"
-          if [ -z "$PUSHGATEWAY_URL" ]; then
-            echo "Erreur : PUSHGATEWAY_URL n'est pas défini ou est vide"
+          if [ -z "$PUSHGATEWAY_URL" ] || [ -z "$PROMETHEUS_URL" ] || [ -z "$START_TIME" ]; then
+            echo "Erreur : PUSHGATEWAY_URL, PROMETHEUS_URL ou START_TIME n'est pas défini ou est vide"
             exit 1
           fi
-          if [ ! -f /github/workspace/start_time.txt ]; then
-            echo "Erreur : start_time.txt n'existe pas à /github/workspace/start_time.txt"
-            exit 1
-          fi
-          START_TIME=$(cat /github/workspace/start_time.txt)
           END_TIME=$(date +%s)
           DURATION=$((END_TIME - START_TIME))
-          RUN_ID=${{ github.run_id }}
           echo "Durée du job integration-test : $DURATION secondes"
-          echo "workflow_duration{job=\"integration-test\",repository=\"${{ github.repository }}\",run_id=\"$RUN_ID\"} $DURATION" | curl -s -L --data-binary @- "$PUSHGATEWAY_URL/metrics/job/workflow_metrics"
-        shell: bash
-
-      - name: Debug Working Directory Before Push Error Count
-        run: |
-          echo "Current working directory before Push error count metric: $(pwd)"
-          echo "Listing files before Push error count metric:"
-          ls -la /github/workspace
-        shell: bash
-
-      - name: Push error count metric
-        if: failure()
-        run: |
-          echo "Extracting PUSHGATEWAY_URL for this step..."
-          PUSHGATEWAY_URL=$(yq .pushgateway.url Backend/config.yaml | tr -d '"')
-          echo "PUSHGATEWAY_URL for this step: $PUSHGATEWAY_URL"
-          if [ -z "$PUSHGATEWAY_URL" ]; then
-            echo "Erreur : PUSHGATEWAY_URL n'est pas défini ou est vide"
-            exit 1
-          fi
-          RUN_ID=${{ github.run_id }}
-          echo "error_count{job=\"integration-test\",repository=\"${{ github.repository }}\",run_id=\"$RUN_ID\"} 1" | curl -s -L --data-binary @- "$PUSHGATEWAY_URL/metrics/job/workflow_metrics"
+          # Push to Pushgateway
+          echo "workflow_duration{job=\"integration-test\",repository=\"${{ github.repository }}\"} $DURATION" | curl -s -L --data-binary @- "$PUSHGATEWAY_URL/metrics/job/workflow_metrics"
+          # Push to Prometheus
+          DATA="json
+          {
+            \"streams\": [
+              {
+                \"labels\": {\"job\":\"workflow_metrics\", \"repository\":\"${{ github.repository }}\", \"job_name\":\"integration-test\"},
+                \"entries\": [
+                  { \"ts\": \"$(date -u +%Y-%m-%dT%H:%M:%SZ)\", \"value\": $DURATION }
+                ]
+              }
+            ]
+          }"
+          echo "Envoi de la métrique workflow_duration à Prometheus..."
+          echo "$DATA" | curl -s -X POST -H "Content-Type: application/json" -d @- "$PROMETHEUS_URL/api/v1/write" -o /dev/null
         shell: bash
 
   deploy:
     runs-on: ubuntu-latest
     needs: [build, integration-test]
     steps:
+      - name: Set Start Time
+        run: |
+          echo "START_TIME=$(date +%s)" >> $GITHUB_ENV
+        shell: bash
+
       - name: Checkout code
         uses: actions/checkout@v3
         with:
           fetch-depth: 0  # Fetch all history for proper git operations
 
-      - name: Debug Working Directory Before Set Start Time
+      - name: Install yq
         run: |
-          echo "Current working directory before Set Start Time: $(pwd)"
-          echo "Listing files before Set Start Time:"
-          ls -la /github/workspace
-        shell: bash
-
-      - name: Set Start Time
-        run: |
-          echo "Creating /github/workspace/start_time.txt..."
-          echo "$(date +%s)" > /github/workspace/start_time.txt
-          if [ -f /github/workspace/start_time.txt ]; then
-            echo "start_time.txt created successfully at /github/workspace/start_time.txt."
-            echo "Content of start_time.txt:"
-            cat /github/workspace/start_time.txt
-            echo "Size of start_time.txt: $(stat -c %s /github/workspace/start_time.txt) bytes"
-          else
-            echo "Erreur : start_time.txt n'a pas été créé à /github/workspace/start_time.txt"
-            exit 1
-          fi
-        shell: bash
-
-      - name: Debug Working Directory After Set Start Time
-        run: |
-          echo "Current working directory after Set Start Time: $(pwd)"
-          echo "Listing files after Set Start Time:"
-          ls -la /github/workspace
-          if [ -f /github/workspace/start_time.txt ]; then
-            echo "start_time.txt exists after creation at /github/workspace/start_time.txt."
-          else
-            echo "Erreur : start_time.txt n'existe pas après création à /github/workspace/start_time.txt"
-            exit 1
-          fi
-        shell: bash
-
-      - name: Install yq (stable version)
-        run: |
-          sudo wget -qO /usr/local/bin/yq https://github.com/mikefarah/yq/releases/download/v4.44.3/yq_linux_amd64
+          sudo wget -qO /usr/local/bin/yq https://github.com/mikefarah/yq/releases/latest/download/yq_linux_amd64
           sudo chmod +x /usr/local/bin/yq
           yq --version
         shell: bash
 
       - name: Verify config.yaml
         run: |
-          echo "Current working directory during Verify config.yaml: $(pwd)"
-          echo "Listing files before checking start_time.txt:"
-          ls -la /github/workspace
-          if [ ! -f /github/workspace/start_time.txt ]; then
-            echo "Erreur : start_time.txt n'existe pas à /github/workspace/start_time.txt"
+          if [ -z "$START_TIME" ]; then
+            echo "Erreur : START_TIME n'est pas défini"
             exit 1
           fi
           if [ ! -f Backend/config.yaml ]; then
             echo "Error: Backend/config.yaml not found"
-            ls -R /github/workspace
+            ls -R Backend/
             exit 1
           fi
           echo "Backend/config.yaml found"
           cat Backend/config.yaml
-          echo "Extracting URLs with yq..."
           PUSHGATEWAY_URL=$(yq .pushgateway.url Backend/config.yaml | tr -d '"')
           PROMETHEUS_URL=$(yq .prometheus.url Backend/config.yaml | tr -d '"')
-          echo "PUSHGATEWAY_URL extracted: $PUSHGATEWAY_URL"
-          echo "PROMETHEUS_URL extracted: $PROMETHEUS_URL"
           if [ -z "$PUSHGATEWAY_URL" ]; then
             echo "Erreur : pushgateway.url non défini dans config.yaml"
             exit 1
@@ -764,19 +659,11 @@ jobs:
             echo "Erreur : prometheus.url non défini dans config.yaml"
             exit 1
           fi
-          echo "Exporting variables to GITHUB_ENV..."
+          echo "PUSHGATEWAY_URL: $PUSHGATEWAY_URL"
+          echo "PROMETHEUS_URL: $PROMETHEUS_URL"
+          echo "Exporting variables for subsequent steps..."
           echo "PUSHGATEWAY_URL=$PUSHGATEWAY_URL" >> $GITHUB_ENV
           echo "PROMETHEUS_URL=$PROMETHEUS_URL" >> $GITHUB_ENV
-          echo "Verifying exported variables..."
-          echo "GITHUB_ENV content after export:"
-          cat $GITHUB_ENV
-        shell: bash
-
-      - name: Debug Environment Variables
-        run: |
-          echo "Checking environment variables..."
-          echo "PUSHGATEWAY_URL from env: $PUSHGATEWAY_URL"
-          echo "PROMETHEUS_URL from env: $PROMETHEUS_URL"
         shell: bash
 
       - name: Download build artifacts
@@ -831,9 +718,6 @@ jobs:
 
       - name: Verify Metrics in Prometheus
         run: |
-          echo "Extracting PROMETHEUS_URL for this step..."
-          PROMETHEUS_URL=$(yq .prometheus.url Backend/config.yaml | tr -d '"')
-          echo "PROMETHEUS_URL for this step: $PROMETHEUS_URL"
           if [ -z "$PROMETHEUS_URL" ]; then
             echo "Erreur : PROMETHEUS_URL n'est pas défini ou est vide"
             exit 1
@@ -852,52 +736,29 @@ jobs:
           ${{ secrets.SLACK_WEBHOOK_URL }}
         shell: bash
 
-      - name: Debug Working Directory Before Record Metrics
-        run: |
-          echo "Current working directory before Record deploy workflow metrics: $(pwd)"
-          echo "Listing files before Record deploy workflow metrics:"
-          ls -la /github/workspace
-        shell: bash
-
       - name: Record deploy workflow metrics
-        if: always()
         run: |
-          echo "Extracting PUSHGATEWAY_URL for this step..."
-          PUSHGATEWAY_URL=$(yq .pushgateway.url Backend/config.yaml | tr -d '"')
-          echo "PUSHGATEWAY_URL for this step: $PUSHGATEWAY_URL"
-          if [ -z "$PUSHGATEWAY_URL" ]; then
-            echo "Erreur : PUSHGATEWAY_URL n'est pas défini ou est vide"
+          if [ -z "$PUSHGATEWAY_URL" ] || [ -z "$PROMETHEUS_URL" ] || [ -z "$START_TIME" ]; then
+            echo "Erreur : PUSHGATEWAY_URL, PROMETHEUS_URL ou START_TIME n'est pas défini ou est vide"
             exit 1
           fi
-          if [ ! -f /github/workspace/start_time.txt ]; then
-            echo "Erreur : start_time.txt n'existe pas à /github/workspace/start_time.txt"
-            exit 1
-          fi
-          START_TIME=$(cat /github/workspace/start_time.txt)
           END_TIME=$(date +%s)
           DURATION=$((END_TIME - START_TIME))
-          RUN_ID=${{ github.run_id }}
           echo "Durée du job deploy : $DURATION secondes"
-          echo "workflow_duration{job=\"deploy\",repository=\"${{ github.repository }}\",run_id=\"$RUN_ID\"} $DURATION" | curl -s -L --data-binary @- "$PUSHGATEWAY_URL/metrics/job/workflow_metrics"
-        shell: bash
-
-      - name: Debug Working Directory Before Push Error Count
-        run: |
-          echo "Current working directory before Push error count metric: $(pwd)"
-          echo "Listing files before Push error count metric:"
-          ls -la /github/workspace
-        shell: bash
-
-      - name: Push error count metric
-        if: failure()
-        run: |
-          echo "Extracting PUSHGATEWAY_URL for this step..."
-          PUSHGATEWAY_URL=$(yq .pushgateway.url Backend/config.yaml | tr -d '"')
-          echo "PUSHGATEWAY_URL for this step: $PUSHGATEWAY_URL"
-          if [ -z "$PUSHGATEWAY_URL" ]; then
-            echo "Erreur : PUSHGATEWAY_URL n'est pas défini ou est vide"
-            exit 1
-          fi
-          RUN_ID=${{ github.run_id }}
-          echo "error_count{job=\"deploy\",repository=\"${{ github.repository }}\",run_id=\"$RUN_ID\"} 1" | curl -s -L --data-binary @- "$PUSHGATEWAY_URL/metrics/job/workflow_metrics"
+          # Push to Pushgateway
+          echo "workflow_duration{job=\"deploy\",repository=\"${{ github.repository }}\"} $DURATION" | curl -s -L --data-binary @- "$PUSHGATEWAY_URL/metrics/job/workflow_metrics"
+          # Push to Prometheus
+          DATA="json
+          {
+            \"streams\": [
+              {
+                \"labels\": {\"job\":\"workflow_metrics\", \"repository\":\"${{ github.repository }}\", \"job_name\":\"deploy\"},
+                \"entries\": [
+                  { \"ts\": \"$(date -u +%Y-%m-%dT%H:%M:%SZ)\", \"value\": $DURATION }
+                ]
+              }
+            ]
+          }"
+          echo "Envoi de la métrique workflow_duration à Prometheus..."
+          echo "$DATA" | curl -s -X POST -H "Content-Type: application/json" -d @- "$PROMETHEUS_URL/api/v1/write" -o /dev/null
         shell: bash
