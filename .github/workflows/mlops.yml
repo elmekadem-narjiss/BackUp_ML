@@ -12,11 +12,14 @@ jobs:
   build:
     runs-on: ubuntu-latest
     steps:
+      - name: Checkout code
+        uses: actions/checkout@v3
+
       - name: Debug Working Directory Before Set Start Time
         run: |
           echo "Current working directory before Set Start Time: $(pwd)"
           echo "Listing files before Set Start Time:"
-          ls -la
+          ls -la /github/workspace
         shell: bash
 
       - name: Set Start Time
@@ -46,9 +49,6 @@ jobs:
             exit 1
           fi
         shell: bash
-
-      - name: Checkout code
-        uses: actions/checkout@v3
 
       - name: Set up Python
         uses: actions/setup-python@v4
@@ -136,7 +136,7 @@ jobs:
           fi
           if [ ! -f Backend/config.yaml ]; then
             echo "Error: Backend/config.yaml not found"
-            ls -R Backend/
+            ls -R /github/workspace
             exit 1
           fi
           echo "Backend/config.yaml found"
@@ -418,11 +418,14 @@ jobs:
     runs-on: ubuntu-latest
     needs: build
     steps:
+      - name: Checkout code
+        uses: actions/checkout@v3
+
       - name: Debug Working Directory Before Set Start Time
         run: |
           echo "Current working directory before Set Start Time: $(pwd)"
           echo "Listing files before Set Start Time:"
-          ls -la
+          ls -la /github/workspace
         shell: bash
 
       - name: Set Start Time
@@ -452,9 +455,6 @@ jobs:
             exit 1
           fi
         shell: bash
-
-      - name: Checkout code
-        uses: actions/checkout@v3
 
       - name: Set up Python
         uses: actions/setup-python@v4
@@ -507,7 +507,7 @@ jobs:
           fi
           if [ ! -f Backend/config.yaml ]; then
             echo "Error: Backend/config.yaml not found"
-            ls -R Backend/
+            ls -R /github/workspace
             exit 1
           fi
           echo "Backend/config.yaml found"
@@ -688,11 +688,16 @@ jobs:
     runs-on: ubuntu-latest
     needs: [build, integration-test]
     steps:
+      - name: Checkout code
+        uses: actions/checkout@v3
+        with:
+          fetch-depth: 0  # Fetch all history for proper git operations
+
       - name: Debug Working Directory Before Set Start Time
         run: |
           echo "Current working directory before Set Start Time: $(pwd)"
           echo "Listing files before Set Start Time:"
-          ls -la
+          ls -la /github/workspace
         shell: bash
 
       - name: Set Start Time
@@ -723,11 +728,6 @@ jobs:
           fi
         shell: bash
 
-      - name: Checkout code
-        uses: actions/checkout@v3
-        with:
-          fetch-depth: 0  # Fetch all history for proper git operations
-
       - name: Install yq (stable version)
         run: |
           sudo wget -qO /usr/local/bin/yq https://github.com/mikefarah/yq/releases/download/v4.44.3/yq_linux_amd64
@@ -746,7 +746,7 @@ jobs:
           fi
           if [ ! -f Backend/config.yaml ]; then
             echo "Error: Backend/config.yaml not found"
-            ls -R Backend/
+            ls -R /github/workspace
             exit 1
           fi
           echo "Backend/config.yaml found"
