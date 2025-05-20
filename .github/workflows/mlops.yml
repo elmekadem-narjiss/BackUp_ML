@@ -2,7 +2,7 @@ name: MLFlow and Snakemake Workflow
 
 on:
   schedule:
-    - cron: '0 8 * * *'  # Run daily at 8:00 UTC
+  #  - cron: '0 8 * * *'  # Run daily at 8:00 UTC
   push:
     branches: [main]
   pull_request:
