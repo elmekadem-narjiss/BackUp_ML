@@ -1,9 +1,9 @@
 mlflow:
-  url: https://6bfd-41-248-129-38.ngrok-free.app/
+  url: https://bede-105-158-176-209.ngrok-free.app/
 pushgateway:
-  url: https://5984-41-248-129-38.ngrok-free.app
+  url: https://dce0-105-158-176-209.ngrok-free.app
 prometheus:
-  url: https://f5e8-41-248-129-38.ngrok-free.app
+  url: https://9239-105-158-176-209.ngrok-free.app
 data:
   file_name: lstm_predictions_charger.csv
   file_path: 1fJM376Icrrs9Ww86IN4-4DJw2w-faLoO
