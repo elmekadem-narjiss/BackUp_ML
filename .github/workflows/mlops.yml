@@ -430,199 +430,212 @@ jobs:
     runs-on: ubuntu-latest
     needs: build
     steps:
-      - name: Set Start Time
-        run: |
-          echo "START_TIME=$(date +%s)" >> $GITHUB_ENV
-        shell: bash
+    - name: Set Start Time
+      run: |
+        echo "START_TIME=$(date +%s)" >> $GITHUB_ENV
+      shell: bash
 
-      - name: Checkout code
-        uses: actions/checkout@v3
+    - name: Checkout code
+      uses: actions/checkout@v3
 
-      - name: Set up Python
-        uses: actions/setup-python@v4
-        with:
-          python-version: '3.9'
+    - name: Set up Python
+      uses: actions/setup-python@v4
+      with:
+        python-version: '3.9'
 
-      - name: Install yq
-        run: |
-          sudo wget -qO /usr/local/bin/yq https://github.com/mikefarah/yq/releases/latest/download/yq_linux_amd64
-          sudo chmod +x /usr/local/bin/yq
-          yq --version
-        shell: bash
+    - name: Install yq
+      run: |
+        sudo wget -qO /usr/local/bin/yq https://github.com/mikefarah/yq/releases/latest/download/yq_linux_amd64
+        sudo chmod +x /usr/local/bin/yq
+        yq --version
+      shell: bash
 
-      - name: Cache Python dependencies
-        uses: actions/cache@v4
-        with:
-          path: venv
-          key: ${{ runner.os }}-venv-${{ hashFiles('Backend/requirements.txt') }}
-          restore-keys: |
-            ${{ runner.os }}-venv-
-      - name: Verify requirements.txt
-        run: |
-          if [ ! -f Backend/requirements.txt ]; then
-            echo "Error: Backend/requirements.txt not found"
-            ls -R
-            exit 1
-          fi
-          echo "Backend/requirements.txt found"
-          cat Backend/requirements.txt
-        shell: bash
+    - name: Cache Python dependencies
+      uses: actions/cache@v4
+      with:
+        path: venv
+        key: ${{ runner.os }}-venv-${{ hashFiles('Backend/requirements.txt') }}
+        restore-keys: |
+          ${{ runner.os }}-venv-
 
-      - name: Set up virtual environment and install dependencies
-        run: |
-          python -m venv venv
-          source venv/bin/activate
-          pip install --upgrade pip
-          pip install -r Backend/requirements.txt
-          pip install pytest flake8 pandas
-        shell: bash
+    - name: Verify requirements.txt
+      run: |
+        if [ ! -f Backend/requirements.txt ]; then
+          echo "Error: Backend/requirements.txt not found"
+          ls -R
+          exit 1
+        fi
+        echo "Backend/requirements.txt found"
+        cat Backend/requirements.txt
+      shell: bash
 
-      - name: Verify config.yaml
-        run: |
-          if [ -z "$START_TIME" ]; then
-            echo "Erreur : START_TIME n'est pas défini"
-            exit 1
-          fi
-          if [ ! -f Backend/config.yaml ]; then
-            echo "Error: Backend/config.yaml not found"
-            ls -R Backend/
-            exit 1
-          fi
-          echo "Backend/config.yaml found"
-          cat Backend/config.yaml
-          PUSHGATEWAY_URL=$(yq .pushgateway.url Backend/config.yaml | tr -d '"')
-          PROMETHEUS_URL=$(yq .prometheus.url Backend/config.yaml | tr -d '"')
-          if [ -z "$PUSHGATEWAY_URL" ]; then
-            echo "Erreur : pushgateway.url non défini dans config.yaml"
-            exit 1
-          fi
-          if [ -z "$PROMETHEUS_URL" ]; then
-            echo "Erreur : prometheus.url non défini dans config.yaml"
-            exit 1
-          fi
-          echo "PUSHGATEWAY_URL: $PUSHGATEWAY_URL"
-          echo "PROMETHEUS_URL: $PROMETHEUS_URL"
-          echo "Exporting variables for subsequent steps..."
-          echo "PUSHGATEWAY_URL=$PUSHGATEWAY_URL" >> $GITHUB_ENV
-          echo "PROMETHEUS_URL=$PROMETHEUS_URL" >> $GITHUB_ENV
-        shell: bash
+    - name: Set up virtual environment and install dependencies
+      run: |
+        # Ensure Python is available
+        python3 --version || { echo "Error: Python3 not found"; exit 1; }
+        which python3
+        # Create virtual environment
+        python3 -m venv venv
+        if [ ! -d venv ]; then
+          echo "Error: Virtual environment directory 'venv' not created"
+          ls -la
+          exit 1
+        fi
+        # Activate and install dependencies
+        source venv/bin/activate
+        python --version
+        pip install --upgrade pip
+        pip install -r Backend/requirements.txt
+        pip install pytest flake8 pandas
+      shell: bash
 
-      - name: Check tests directory structure
-        run: |
-          echo "Checking directory structure for tests..."
-          ls -R Backend/tests || echo "Backend/tests does not exist"
-          ls -R tests || echo "Root tests directory does not exist"
-        shell: bash
+    - name: Verify config.yaml
+      run: |
+        if [ -z "$START_TIME" ]; then
+          echo "Erreur : START_TIME n'est pas défini"
+          exit 1
+        fi
+        if [ ! -f Backend/config.yaml ]; then
+          echo "Error: Backend/config.yaml not found"
+          ls -R Backend/
+          exit 1
+        fi
+        echo "Backend/config.yaml found"
+        cat Backend/config.yaml
+        PUSHGATEWAY_URL=$(yq .pushgateway.url Backend/config.yaml | tr -d '"')
+        PROMETHEUS_URL=$(yq .prometheus.url Backend/config.yaml | tr -d '"')
+        if [ -z "$PUSHGATEWAY_URL" ]; then
+          echo "Erreur : pushgateway.url non défini dans config.yaml"
+          exit 1
+        fi
+        if [ -z "$PROMETHEUS_URL" ]; then
+          echo "Erreur : prometheus.url non défini dans config.yaml"
+          exit 1
+        fi
+        echo "PUSHGATEWAY_URL: $PUSHGATEWAY_URL"
+        echo "PROMETHEUS_URL: $PROMETHEUS_URL"
+        echo "Exporting variables for subsequent steps..."
+        echo "PUSHGATEWAY_URL=$PUSHGATEWAY_URL" >> $GITHUB_ENV
+        echo "PROMETHEUS_URL=$PROMETHEUS_URL" >> $GITHUB_ENV
+      shell: bash
 
-      - name: Lint and format code
-        run: |
-          source venv/bin/activate
-          # Skip black formatting check for integration testing
-          echo "Skipping black formatting check to avoid reformatting files"
-          # Lint with relaxed rules for integration testing
-          if [ -d tests ] && [ "$(ls -A tests)" ]; then
-            echo "Linting Backend and root tests directories with relaxed rules"
-            flake8 Backend tests --max-line-length=88 --extend-ignore=E203,E501,F841,F401,E402,W291,E302,W293,E305,E231,E265,W292,E303 --exclude venv,Backend/tests
-          else
-            echo "Warning: root tests directory is empty or missing, linting only Backend with relaxed rules"
-            flake8 Backend --max-line-length=88 --extend-ignore=E203,E501,F841,F401,E402,W291,E302,W293,E305,E231,E265,W292,E303 --exclude venv,Backend/tests
-          fi
-        shell: bash
+    - name: Check tests directory structure
+      run: |
+        echo "Checking directory structure for tests..."
+        ls -R Backend/tests || echo "Backend/tests does not exist"
+        ls -R tests || echo "Root tests directory does not exist"
+      shell: bash
 
-      - name: Download BESSBatteryEnv script
-        run: |
-          wget https://raw.githubusercontent.com/elmekadem-narjiss/BackUp_ML/refs/heads/main/Backend/BESSBatteryEnv.py -O BESSBatteryEnv.py
-          if [[ ! -s BESSBatteryEnv.py ]]; then
-            echo "Error: BESSBatteryEnv.py is missing or empty"
-            exit 1
-          fi
-          ls -l BESSBatteryEnv.py
-        shell: bash
+    - name: Lint and format code
+      run: |
+        source venv/bin/activate
+        # Skip black formatting check for integration testing
+        echo "Skipping black formatting check to avoid reformatting files"
+        # Lint with relaxed rules for integration testing
+        if [ -d tests ] && [ "$(ls -A tests)" ]; then
+          echo "Linting Backend and root tests directories with relaxed rules"
+          flake8 Backend tests --max-line-length=88 --extend-ignore=E203,E501,F841,F401,E402,W291,E302,W293,E305,E231,E265,W292,E303 --exclude venv,Backend/tests
+        else
+          echo "Warning: root tests directory is empty or missing, linting only Backend with relaxed rules"
+          flake8 Backend --max-line-length=88 --extend-ignore=E203,E501,F841,F401,E402,W291,E302,W293,E305,E231,E265,W292,E303 --exclude venv,Backend/tests
+        fi
+      shell: bash
 
-      - name: Create and validate test CSV
-        run: |
-          source venv/bin/activate
-          python -c "
-          import pandas as pd
-          data = pd.DataFrame({
-              'energyproduced': [100, 200, 300],
-              'future_production': [250, 350, 450]
-          })
-          data.to_csv('test_lstm_predictions.csv', index=False)
-          df = pd.read_csv('test_lstm_predictions.csv')
-          required_columns = ['energyproduced', 'future_production']
-          if not all(col in df.columns for col in required_columns):
-            print('Error: Missing required columns in CSV')
-            exit(1)
-          if df.empty:
-            print('Error: CSV is empty')
-            exit(1)
-          print('CSV validated successfully')
-          "
-          ls -l test_lstm_predictions.csv
-        shell: bash
+    - name: Download BESSBatteryEnv script
+      run: |
+        wget https://raw.githubusercontent.com/elmekadem-narjiss/BackUp_ML/refs/heads/main/Backend/BESSBatteryEnv.py -O BESSBatteryEnv.py
+        if [[ ! -s BESSBatteryEnv.py ]]; then
+          echo "Error: BESSBatteryEnv.py is missing or empty"
+          exit 1
+        fi
+        ls -l BESSBatteryEnv.py
+      shell: bash
 
-      - name: Run integration tests
-        if: runner.os == 'Linux' && hashFiles('tests/*') != ''
-        run: |
-          source venv/bin/activate
-          export PYTHONPATH=$PYTHONPATH:$GITHUB_WORKSPACE
-          pytest tests/ --html=report.html --self-contained-html --junitxml=test-results.xml -v
-        shell: bash
+    - name: Create and validate test CSV
+      run: |
+        source venv/bin/activate
+        python -c "
+        import pandas as pd
+        data = pd.DataFrame({
+            'energyproduced': [100, 200, 300],
+            'future_production': [250, 350, 450]
+        })
+        data.to_csv('test_lstm_predictions.csv', index=False)
+        df = pd.read_csv('test_lstm_predictions.csv')
+        required_columns = ['energyproduced', 'future_production']
+        if not all(col in df.columns for col in required_columns):
+          print('Error: Missing required columns in CSV')
+          exit(1)
+        if df.empty:
+          print('Error: CSV is empty')
+          exit(1)
+        print('CSV validated successfully')
+        "
+        ls -l test_lstm_predictions.csv
+      shell: bash
 
-      - name: Verify Metrics in Prometheus
-        run: |
-          if [ -z "$PROMETHEUS_URL" ]; then
-            echo "Erreur : PROMETHEUS_URL n'est pas défini ou est vide"
-            exit 1
-          fi
-          echo "🔍 Vérification des métriques dans Prometheus..."
-          curl -s -L "$PROMETHEUS_URL/api/v1/query?query=workflow_duration" | jq . || echo "Métrique workflow_duration non trouvée dans Prometheus"
-          curl -s -L "$PROMETHEUS_URL/api/v1/query?query=success" | jq . || echo "Métrique success non trouvée dans Prometheus"
-        shell: bash
+    - name: Run integration tests
+      if: runner.os == 'Linux' && hashFiles('tests/*') != ''
+      run: |
+        source venv/bin/activate
+        export PYTHONPATH=$PYTHONPATH:$GITHUB_WORKSPACE
+        pytest tests/ --html=report.html --self-contained-html --junitxml=test-results.xml -v
+      shell: bash
 
-      - name: Upload test artifacts
-        uses: actions/upload-artifact@v4
-        with:
-          name: test-artifacts
-          path: |
-            test-results.xml
-            report.html
-            *.log
-      - name: Notify on test results
-        if: always()
-        run: |
-          curl -X POST -H 'Content-type: application/json' \
-          --data "{\"text\": \"Integration test for ${{ github.repository }} completed.\nStatus: ${{ job.status }}\nRun: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}\"}" \
-          ${{ secrets.SLACK_WEBHOOK_URL }}
-        shell: bash
+    - name: Verify Metrics in Prometheus
+      run: |
+        if [ -z "$PROMETHEUS_URL" ]; then
+          echo "Erreur : PROMETHEUS_URL n'est pas défini ou est vide"
+          exit 1
+        fi
+        echo "🔍 Vérification des métriques dans Prometheus..."
+        curl -s -L "$PROMETHEUS_URL/api/v1/query?query=workflow_duration" | jq . || echo "Métrique workflow_duration non trouvée dans Prometheus"
+        curl -s -L "$PROMETHEUS_URL/api/v1/query?query=success" | jq . || echo "Métrique success non trouvée dans Prometheus"
+      shell: bash
 
-      - name: Record workflow metrics
-        run: |
-          if [ -z "$PUSHGATEWAY_URL" ] || [ -z "$PROMETHEUS_URL" ] || [ -z "$START_TIME" ]; then
-            echo "Erreur : PUSHGATEWAY_URL, PROMETHEUS_URL ou START_TIME n'est pas défini ou est vide"
-            exit 1
-          fi
-          END_TIME=$(date +%s)
-          DURATION=$((END_TIME - START_TIME))
-          echo "Durée du job integration-test : $DURATION secondes"
-          # Push to Pushgateway
-          echo "workflow_duration{job=\"integration-test\",repository=\"${{ github.repository }}\"} $DURATION" | curl -s -L --data-binary @- "$PUSHGATEWAY_URL/metrics/job/workflow_metrics"
-          # Push to Prometheus
-          DATA="json
-          {
-            \"streams\": [
-              {
-                \"labels\": {\"job\":\"workflow_metrics\", \"repository\":\"${{ github.repository }}\", \"job_name\":\"integration-test\"},
-                \"entries\": [
-                  { \"ts\": \"$(date -u +%Y-%m-%dT%H:%M:%SZ)\", \"value\": $DURATION }
-                ]
-              }
-            ]
-          }"
-          echo "Envoi de la métrique workflow_duration à Prometheus..."
-          echo "$DATA" | curl -s -X POST -H "Content-Type: application/json" -d @- "$PROMETHEUS_URL/api/v1/write" -o /dev/null
-        shell: bash
+    - name: Upload test artifacts
+      uses: actions/upload-artifact@v4
+      with:
+        name: test-artifacts
+        path: |
+          test-results.xml
+          report.html
+          *.log
+
+    - name: Notify on test results
+      if: always()
+      run: |
+        curl -X POST -H 'Content-type: application/json' \
+        --data "{\"text\": \"Integration test for ${{ github.repository }} completed.\nStatus: ${{ job.status }}\nRun: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}\"}" \
+        ${{ secrets.SLACK_WEBHOOK_URL }}
+      shell: bash
+
+    - name: Record workflow metrics
+      run: |
+        if [ -z "$PUSHGATEWAY_URL" ] || [ -z "$PROMETHEUS_URL" ] || [ -z "$START_TIME" ]; then
+          echo "Erreur : PUSHGATEWAY_URL, PROMETHEUS_URL ou START_TIME n'est pas défini ou est vide"
+          exit 1
+        fi
+        END_TIME=$(date +%s)
+        DURATION=$((END_TIME - START_TIME))
+        echo "Durée du job integration-test : $DURATION secondes"
+        # Push to Pushgateway
+        echo "workflow_duration{job=\"integration-test\",repository=\"${{ github.repository }}\"} $DURATION" | curl -s -L --data-binary @- "$PUSHGATEWAY_URL/metrics/job/workflow_metrics"
+        # Push to Prometheus
+        DATA="json
+        {
+          \"streams\": [
+            {
+              \"labels\": {\"job\":\"workflow_metrics\", \"repository\":\"${{ github.repository }}\", \"job_name\":\"integration-test\"},
+              \"entries\": [
+                { \"ts\": \"$(date -u +%Y-%m-%dT%H:%M:%SZ)\", \"value\": $DURATION }
+              ]
+            }
+          ]
+        }"
+        echo "Envoi de la métrique workflow_duration à Prometheus..."
+        echo "$DATA" | curl -s -X POST -H "Content-Type: application/json" -d @- "$PROMETHEUS_URL/api/v1/write" -o /dev/null
+      shell: bash
         
   deploy:
     runs-on: ubuntu-latest
