@@ -46,6 +46,7 @@ jobs:
           key: ${{ runner.os }}-venv-${{ hashFiles('Backend/requirements.txt') }}-v2  # Updated key to invalidate cache
           restore-keys: |
             ${{ runner.os }}-venv-
+
       - name: Verify requirements.txt
         run: |
           if [ ! -f Backend/requirements.txt ]; then
@@ -81,10 +82,10 @@ jobs:
       - name: Save Google Drive tokens
         run: |
           cat << 'EOF' > token.json
-          {"token": "${{ secrets.GDRIVE_TOKEN }}", "refresh_token": "${{ secrets.GDRIVE_REFRESH_TOKEN }}", "token_uri": "https://oauth2.googleapis.com/token", "client_id": "${{ secrets.GDRIVE_CLIENT_ID }}", "client_secret": "${{ secrets.GDRIVE_CLIENT_SECRET }}", "scopes": ["https://www.googleapis.com/auth/drive"], "universe_domain": "googleapis.com", "account": "", "expiry": "2025-05-03T23:38:04.625991Z"}
+          {"token": "${{ secrets.GOOGLE_DRIVE_TOKEN }}", "refresh_token": "", "token_uri": "https://oauth2.googleapis.com/token", "client_id": "", "client_secret": "${{ secrets.GOOGLE_DRIVE_CLIENT_SECRETS }}", "scopes": ["https://www.googleapis.com/auth/drive"], "universe_domain": "googleapis.com", "account": "", "expiry": "2025-12-20T01:07:00Z"}
           EOF
           cat << 'EOF' > client_secrets.json
-          {"installed":{"client_id":"${{ secrets.GDRIVE_CLIENT_ID }}","project_id":"colabautomation-458721","auth_uri":"https://accounts.google.com/o/oauth2/auth","token_uri":"https://oauth2.googleapis.com/token","auth_provider_x509_cert_url":"https://www.googleapis.com/oauth2/v1/certs","client_secret":"${{ secrets.GDRIVE_CLIENT_SECRET }}","redirect_uris":["http://localhost"]}}
+          {"installed":{"client_id":"","project_id":"colabautomation-458721","auth_uri":"https://accounts.google.com/o/oauth2/auth","token_uri":"https://oauth2.googleapis.com/token","auth_provider_x509_cert_url":"https://www.googleapis.com/oauth2/v1/certs","client_secret":"${{ secrets.GOOGLE_DRIVE_CLIENT_SECRETS }}","redirect_uris":["http://localhost"]}}
           EOF
           cat token.json | jq . > /dev/null || { echo "Erreur : token.json n'est pas un JSON valide"; exit 1; }
           cat client_secrets.json | jq . > /dev/null || { echo "Erreur : client_secrets.json n'est pas un JSON valide"; exit 1; }
@@ -390,6 +391,7 @@ jobs:
             output/ppo_bess_model_metrics.json
             output/evaluation_metrics.json
             output/ppo_pipeline_executed.ipynb
+
       - name: Notify on build results
         if: always()
         run: |
@@ -456,6 +458,7 @@ jobs:
           key: ${{ runner.os }}-venv-${{ hashFiles('Backend/requirements.txt') }}
           restore-keys: |
             ${{ runner.os }}-venv-
+
       - name: Verify requirements.txt
         run: |
           if [ ! -f Backend/requirements.txt ]; then
@@ -588,6 +591,7 @@ jobs:
             test-results.xml
             report.html
             *.log
+
       - name: Notify on test results
         if: always()
         run: |
