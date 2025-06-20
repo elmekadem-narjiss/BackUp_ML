@@ -474,6 +474,8 @@ jobs:
         # Ensure Python is available
         python3 --version || { echo "Error: Python3 not found"; exit 1; }
         which python3
+        # Remove existing venv to ensure a clean creation
+        rm -rf venv
         # Create virtual environment
         python3 -m venv venv
         if [ ! -d venv ]; then
